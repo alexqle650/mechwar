@@ -1,0 +1,14 @@
+# Secrets and local config: never commit these
+.env
+.env.*
+*.key
+*.pem
+secrets.*
+config.local.*
+credentials*.json
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
