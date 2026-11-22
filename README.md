@@ -16,6 +16,8 @@ Open `index.html` in a browser to play. Progress saves in the browser's localSto
 2. The friend opens the same page, presses **P**, types the code and presses **Join**.
 3. You'll see each other move. The host finds the friend's base through the **east** gate of their base; the guest finds the host's base through the **west** gate.
 
+**PvP is always on outside the bases**: on the bridges, in the zones and in boss arenas you can ambush each other. Both bases are safe. If you're knocked out you respawn at home with a few seconds of spawn shield and lose nothing; the winner gets a kill and a scrap bonus (at most once every 2 minutes).
+
 Each player keeps their own save; nothing about your progress is sent. The browsers meet through the free [PeerJS](https://peerjs.com) cloud server, then talk directly over WebRTC. No server of your own and no API key are needed. Your friend can see your IP address, so only play with people you know. Some school or work networks block direct connections.
 
 ## Contributing

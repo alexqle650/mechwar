@@ -967,7 +967,7 @@ function updateDrones(dt){
     d.fireT -= dt;
     if (d.fireT <= 0 && !flee){
       let best = null, bd = 420;
-      for (const e of enemies){ if (e.dead) continue; const dd = Math.hypot(e.x-d.x, e.y-d.y) - e.r; if (dd < bd){ bd = dd; best = e; } }
+      for (const e of targets()){ if (e.dead) continue; const dd = Math.hypot(e.x-d.x, e.y-d.y) - e.r; if (dd < bd){ bd = dd; best = e; } }
       if (best){
         d.fireT = 0.7; d.a = Math.atan2(best.y-d.y, best.x-d.x);
         const dmg = (P.inMech ? ST.dmg : PILOT.dmg) * 0.35 * (P.inMech ? ST.droneMul : 1), sp = 600;
@@ -980,6 +980,7 @@ function updateDrones(dt){
 function despawn(e){ if (e.dead) return; e.dead = true; burst(e.x,e.y,'#9be7ff',12); }
 function hurtEnemy(e, d, crit){
   if (e.dead) return;
+  if (e.pvp){ pvpHit(d, crit); return; }
   e.hp -= d; e.hitT = 0.1; e.aggro = 5;
   hitMark = crit ? -0.16 : 0.12; sfx(crit ? 'crit' : 'hit');
   if (P.inMech && ST.vamp && !P.dead) P.hp = Math.min(ST.maxhp, P.hp + d*ST.vamp);
@@ -1827,6 +1828,7 @@ function muzzle(){
   return {x:P.x + rx*8.5*PILOT_S + Math.cos(f)*14*PILOT_S, y:P.y + ry*8.5*PILOT_S + Math.sin(f)*14*PILOT_S, h:17*PILOT_S};
 }
 function fire(){
+  const nb = bullets.length, nbm = beams.length, nbo = bolts.length;
   const m = muzzle(), cs = CS(), wp = partById(S.eq.Weapon);
   const col = P.inMech ? (wp ? TIERS[wp.tier].c : '#5fe0ff') : '#5fe0ff';
   const Wk = P.inMech ? cs.weapon : 'Pilot';
@@ -1853,23 +1855,24 @@ function fire(){
   }
   else if (Wk === 'Laser'){
     const L = 520, ex = m.x + Math.cos(P.aim)*L, ey = m.y + Math.sin(P.aim)*L;
-    for (const e of enemies){ if (e.dead) continue; const t = clamp(((e.x-m.x)*Math.cos(P.aim) + (e.y-m.y)*Math.sin(P.aim)), 0, L);
+    for (const e of targets()){ if (e.dead) continue; const t = clamp(((e.x-m.x)*Math.cos(P.aim) + (e.y-m.y)*Math.sin(P.aim)), 0, L);
       const px2 = m.x + Math.cos(P.aim)*t, py2 = m.y + Math.sin(P.aim)*t; if (Math.hypot(e.x-px2, e.y-py2) < e.r + 8){ let d = dmgNow*0.9, crit = false; if (R() < cs.crit){ d *= 2; crit = true; } hurtEnemy(e, d, crit); } }
     beams.push({x0:m.x, y0:m.y, x1:ex, y1:ey, h:m.h, t:0.09, col});
   }
   else if (Wk === 'Tesla Coil'){
     let from = {x:m.x, y:m.y}, dmg = dmgNow*1.2, n = 0; const hit = new Set();
-    let cand = enemies.filter(e => !e.dead && dist(e,P) < 320 + e.r && Math.abs(angDiff(Math.atan2(e.y-P.y,e.x-P.x), P.aim)) < 0.45).sort((a,b) => dist(a,P)-dist(b,P))[0];
+    let cand = targets().filter(e => !e.dead && dist(e,P) < 320 + e.r && Math.abs(angDiff(Math.atan2(e.y-P.y,e.x-P.x), P.aim)) < 0.45).sort((a,b) => dist(a,P)-dist(b,P))[0];
     while (cand && n < 4){
       bolts.push({x0:from.x, y0:from.y, x1:cand.x, y1:cand.y, h:m.h, t:0.14});
       let d = dmg, crit = false; if (R() < cs.crit){ d *= 2; crit = true; }
       hurtEnemy(cand, d, crit); hit.add(cand); from = {x:cand.x, y:cand.y}; n++; dmg *= 0.8;
-      cand = enemies.filter(e => !e.dead && !hit.has(e) && Math.hypot(e.x-from.x,e.y-from.y) < 170 + e.r).sort((a,b) => Math.hypot(a.x-from.x,a.y-from.y)-Math.hypot(b.x-from.x,b.y-from.y))[0];
+      cand = targets().filter(e => !e.dead && !hit.has(e) && Math.hypot(e.x-from.x,e.y-from.y) < 170 + e.r).sort((a,b) => Math.hypot(a.x-from.x,a.y-from.y)-Math.hypot(b.x-from.x,b.y-from.y))[0];
     }
     if (!n) bolts.push({x0:m.x, y0:m.y, x1:m.x+Math.cos(P.aim)*140, y1:m.y+Math.sin(P.aim)*140, h:m.h, t:0.1});
   }
   else shot(P.aim, 560, 0.9, dmgNow);
   parts.push({x:m.x,y:m.y,h:m.h,vh:0,vx:0,vy:0,life:0.06,max:0.06,col:'#ffffff',s:P.inMech?4:2});
+  netShots(nb, nbm, nbo);
 }
 function startMelee(Wk, cs, dmgNow){
   const M = {Blade:{sw:0.26, t:0.12, dm:1.8, range:44, arc:1.05, lunge:150}, Hammer:{sw:0.4, t:0.2, dm:3.4, range:48, arc:0.8, lunge:150},
@@ -1877,14 +1880,14 @@ function startMelee(Wk, cs, dmgNow){
     Drill:{sw:0.12, t:0.04, dm:0.55, range:44, arc:0.55, lunge:70}, Whip:{sw:0.34, t:0.15, dm:1.7, range:150, arc:1.0, lunge:30}}[Wk];
   P.swingT = P.swingMax = M.sw;
   let tgt = null, bd = M.lunge + 20;
-  for (const e of enemies){ if (e.dead) continue; const d = dist(e,P) - e.r; if (d < bd && Math.abs(angDiff(Math.atan2(e.y-P.y,e.x-P.x), P.aim)) < 0.7){ bd = d; tgt = e; } }
+  for (const e of targets()){ if (e.dead) continue; const d = dist(e,P) - e.r; if (d < bd && Math.abs(angDiff(Math.atan2(e.y-P.y,e.x-P.x), P.aim)) < 0.7){ bd = d; tgt = e; } }
   const sc = mS();
   if (tgt && bd > M.range*0.6*sc){ const a = Math.atan2(tgt.y-P.y, tgt.x-P.x); P.dvx = Math.cos(a); P.dvy = Math.sin(a); P.dashT = Math.min(0.18, (bd-M.range*0.5*sc)/(ST.speed*9*3.2)); P.aim = a; P.face = a; }
   P.melee = {aim:P.aim, t:M.t, kind:Wk, heavy:Wk === 'Hammer', range:M.range*Math.max(1, sc/1.45), arc:M.arc, dmg:dmgNow*M.dm, crit:cs.crit, hits:Wk === 'Claws' ? 2 : Wk === 'Drill' ? 3 : 1};
 }
 function meleeHit(){
   const m = P.melee;
-  for (const e of enemies){
+  for (const e of targets()){
     if (e.dead) continue; const d = dist(e,P) - e.r;
     if (d > m.range || Math.abs(angDiff(Math.atan2(e.y-P.y,e.x-P.x), m.aim)) > m.arc + (e.r > 30 ? 0.3 : 0)) continue;
     let dmg = m.dmg, crit = false; if (R() < m.crit){ dmg *= 2; crit = true; }
@@ -1895,7 +1898,7 @@ function meleeHit(){
   }
   const wp = partById(S.eq.Weapon), col = wp ? TIERS[wp.tier].c : '#ffffff';
   if (m.heavy){ sfx('smash'); const fx = P.x+Math.cos(m.aim)*34, fz = P.y+Math.sin(m.aim)*34; ring(fx,fz,col,44); burst(fx,fz,'#8a8070',16,150); shake = Math.max(shake, 3);
-    for (const e of enemies){ if (!e.dead && Math.hypot(e.x-fx,e.y-fz) < 44 + e.r) hurtEnemy(e, m.dmg*0.35); } }
+    for (const e of targets()){ if (!e.dead && Math.hypot(e.x-fx,e.y-fz) < 44 + e.r) hurtEnemy(e, m.dmg*0.35); } }
   else if (m.kind === 'Whip'){ for (let k=1;k<=12;k++){ const a = m.aim + Math.sin(k*0.6)*0.25; parts.push({x:P.x+Math.cos(a)*k*m.range/12, y:P.y+Math.sin(a)*k*m.range/12, h:22+Math.sin(k)*4, vh:0, vx:0, vy:0, life:0.2, max:0.2, col:'#9be7ff', s:3}); } }
   else if (m.kind === 'Drill'){ for (let k=0;k<4;k++) parts.push({x:P.x+Math.cos(m.aim)*36, y:P.y+Math.sin(m.aim)*36, h:20, vh:rr(30,90), vx:rr(-60,60), vy:rr(-60,60), life:0.3, max:0.3, col:'#ffd23f', s:2}); }
   else if (m.kind === 'Spear'){ for (let k=1;k<=8;k++) parts.push({x:P.x+Math.cos(m.aim)*k*m.range/8, y:P.y+Math.sin(m.aim)*k*m.range/8, h:22, vh:0, vx:0, vy:0, life:0.15, max:0.15, col, s:3}); }
@@ -1905,7 +1908,8 @@ function meleeHit(){
 function explode(b){
   sfx('boom');
   burst(b.x,b.y,'#ffb347',22,200); burst(b.x,b.y,'#555b66',10,120); ring(b.x,b.y,'#ffcf3a',b.splash); shake = Math.max(shake, 1.2);
-  for (const e of enemies){ if (e.dead) continue; const d = Math.hypot(e.x-b.x, e.y-b.y); if (d < b.splash + e.r) hurtEnemy(e, b.dmg*(1 - 0.5*d/(b.splash+e.r)), b.crit); }
+  if (b.from === 'fx') return;   // the friend's shot, shown only: its damage is worked out on their side
+  for (const e of targets()){ if (e.dead) continue; const d = Math.hypot(e.x-b.x, e.y-b.y); if (d < b.splash + e.r) hurtEnemy(e, b.dmg*(1 - 0.5*d/(b.splash+e.r)), b.crit); }
 }
 function ability(){
   if (paused() || P.dead || P.abT > 0) return;
@@ -1917,7 +1921,7 @@ function ability(){
   else if (L === 'Piston Legs'){
     if (flee){ note('No slamming while you carry the crate. RUN!', '#ff8c7a'); return; }
     P.abT = 5; shake = 4; sfx('smash'); ring(P.x,P.y,'#ffcf3a',100); ring(P.x,P.y,'#ffffff',60); burst(P.x,P.y,'#8a8070',26,220);
-    for (const e of enemies){ if (e.dead) continue; const d = dist(e,P); if (d < 100 + e.r){ hurtEnemy(e, ST.pulse*ST.slam); const k = 40/(d||1); e.x += (e.x-P.x)*k; e.y += (e.y-P.y)*k; collide(e,false); } }
+    for (const e of targets()){ if (e.dead) continue; const d = dist(e,P); if (d < 100 + e.r){ hurtEnemy(e, ST.pulse*ST.slam); const k = 40/(d||1); e.x += (e.x-P.x)*k; e.y += (e.y-P.y)*k; collide(e,false); } }
   }
   else if (L === 'Spider Legs'){ P.abT = 4; sfx('dash'); ring(P.x,P.y,'#ffffff',170); for (const e of enemies) if (!e.dead && dist(e,P) < 170 + e.r){ e.slowT = 3; } note('Webbed!', '#ffffff'); }
   else note((L || 'These legs')+' have no SPACE ability. Thruster Legs dash, Piston Legs slam.', '#9aa6bd');
@@ -1931,9 +1935,9 @@ function pulse(){
   if (ST.K.Core === 'Fusion Core'){ P.odT = ST.od; note('OVERDRIVE!', '#ff9a2e'); }
   if (ST.K.Core === 'Singularity Core'){ P.hp = Math.min(ST.maxhp, P.hp + ST.maxhp*ST.heal); ring(P.x,P.y,'#ff4f93',90); }
   ring(P.x,P.y,'#5fe0ff',110); ring(P.x,P.y,'#ffffff',70); burst(P.x,P.y,'#5fe0ff',24,220);
-  for (const e of enemies) if (!e.dead && dist(e,P) <= 110 + e.r) hurtEnemy(e, ST.pulse);
+  for (const e of targets()) if (!e.dead && dist(e,P) <= 110 + e.r) hurtEnemy(e, ST.pulse);
 }
-function hurtPlayer(d, src){
+function hurtPlayer(d, src, pvp){
   if (P.dead) return;
   if (P.inMech){
     d *= 1 - ST.resist;
@@ -1943,7 +1947,7 @@ function hurtPlayer(d, src){
   }
   P.hp -= d; P.hurtT = 0.2; P.regenT = 3; dmgFlash = Math.min(0.5, dmgFlash + 0.2 + d/CS().maxhp); sfx('hurt');
   floater(P.x, P.y, '-'+Math.round(d), '#ff6b6b', P.inMech ? 60 : 26);
-  if (P.hp <= 0){ if (P.inMech) wreckMech(); else playerDie(); }
+  if (P.hp <= 0){ if (pvp) pvpDefeat(); else if (P.inMech) wreckMech(); else playerDie(); }
 }
 function enterMech(){
   if (P.dead || paused()) return;
@@ -2062,7 +2066,7 @@ function updatePlayer(dt){
   P.mouseAim = !(shiftLock || isTouch);
   if (P.mouseAim){ const g = mouseGround(); if (g) base = Math.atan2(g.z-P.y, g.x-P.x); }
   let aim = base, best = isTouch ? 0.35 : (P.inMech && ST.K.Head === 'Optic Helm' ? 0.22 : 0.13);
-  for (const e of enemies){
+  for (const e of targets()){
     const d = dist(e,P); if (d > 480) continue;
     const a = Math.atan2(e.y-P.y, e.x-P.x), df = Math.abs(angDiff(a, base));
     if (df < best){ best = df; aim = a; }
@@ -2113,7 +2117,7 @@ function updateBullets(dt){
     if (blocked){ b.life = 0; if (b.splash){ b.done = true; explode(b); } else burst(b.x,b.y,b.col,4,60); continue; }
     if (b.from === 'p'){
       if (b.rocket && R() < 0.5) parts.push({x:b.x,y:b.y,h:b.h,vh:10,vx:0,vy:0,life:0.5,max:0.5,col:'#9aa0aa',s:2});
-      for (const e of enemies){
+      for (const e of targets()){
         if (e.dead || (b.pierce && b.pierce.has(e))) continue;
         if (segDist(e.x, e.y, bx0, by0, b.x, b.y) < e.r+7){
           if (b.splash){ explode(b); b.life = 0; break; }
@@ -2123,6 +2127,7 @@ function updateBullets(dt){
         }
       }
       if (b.splash && b.life <= 0 && !b.done){ b.done = true; }
+    } else if (b.from === 'fx'){ /* friend's shot: damage arrives as a 'hit' message */
     } else if (!P.dead && P.inMech && P.swingT > 0 && ST.weapon === 'Blade' && Math.hypot(P.x-b.x,P.y-b.y) < 46 && Math.abs(angDiff(Math.atan2(b.y-P.y,b.x-P.x), P.face)) < 1.2){ b.life = 0; burst(b.x,b.y,'#ffffff',6,90); floater(b.x,b.y,'BLOCK','#9be7ff',40); sfx('block');
     } else if (!P.dead && Math.hypot(P.x-b.x,P.y-b.y) < P.r+4){ hurtPlayer(b.dmg, b.src); b.life=0; burst(b.x,b.y,b.col,6,80); }
   }
@@ -3504,7 +3509,8 @@ function cleanBase(m){
 }
 function sendState(){
   netSend({t:'s', x:Math.round(P.x), y:Math.round(P.y), f:+(P.face||0).toFixed(2), a:+(P.aim||0).toFixed(2), m:P.inMech?1:0, d:P.dead?1:0,
-    fl:P.fly?1:0, sh:P.shootT > 0 || clock < (P.flashT||0) ? 1 : 0, sw:P.swingT > 0 ? +(P.swingT/P.swingMax).toFixed(2) : 0});
+    fl:P.fly?1:0, sh:P.shootT > 0 || clock < (P.flashT||0) ? 1 : 0, sw:P.swingT > 0 ? +(P.swingT/P.swingMax).toFixed(2) : 0,
+    hp:+clamp(P.hp/(CS().maxhp||1), 0, 1).toFixed(2), sf:clock < (P.pvpSafe||0) ? 1 : 0});
 }
 function friendTitle(){ for (const s of signs) if (s.friendTitle) s.text = (NET.R ? NET.R.name : 'FRIEND') + "'S BASE"; }
 function onNetData(m){
@@ -3522,9 +3528,12 @@ function onNetData(m){
   } else if (m.t === 's'){
     const y = num(m.y,-1e5,1e5,0);
     R.tx = mapIn(num(m.x,-1e5,1e5,0), y); R.ty = y; R.face = num(m.f,-50,50,0); R.aim = num(m.a,-50,50,0);
-    R.inMech = !!m.m; R.dead = !!m.d; R.fly = !!m.fl; R.shoot = !!m.sh; R.swing = num(m.sw,0,1,0);
+    R.inMech = !!m.m; R.dead = !!m.d; R.fly = !!m.fl; R.shoot = !!m.sh; R.swing = num(m.sw,0,1,0); R.hp = num(m.hp,0,1,1); R.safe = !!m.sf;
     if (!R.seen){ R.seen = true; R.x = R.tx; R.y = R.ty; }
   } else if (m.t === 'base') NET.base = cleanBase(m);
+  else if (m.t === 'hit') pvpTakeHit(m);
+  else if (m.t === 'ko') pvpScored();
+  else if (m.t === 'fx') netFx(m);
   else if (m.t === 'full') netLeave('That room already has two players.');
   else if (m.t === 'bye') netDropped(R.name + ' left the game.');
 }
@@ -3534,7 +3543,7 @@ function attachConn(c){
     if (NET.conn !== c) return;
     clearTimeout(NET.joinTimer); NET.lastRecv = performance.now();
     ensureFriendBase(NET.side);
-    NET.lookKey = ''; NET.sendT = 0; NET.lookT = 5; NET.baseT = 0.5;
+    NET.lookKey = ''; NET.sendT = 0; NET.lookT = 5; NET.baseT = 0.5; NET.pvpWarned = false;
     netSend(Object.assign({t:'hi', v:NET_VER}, myLook()));
     setNet('online', 'Connected! Walk through the ' + (NET.side > 0 ? 'east' : 'west') + ' gate of your base to visit your friend.');
   });
@@ -3602,6 +3611,7 @@ function netLeave(msg){
   setNet('offline', msg || 'Not connected.');
 }
 function netTick(dt){
+  pvpTick(dt);
   const R = NET.R;
   if (R && R.seen){
     const dx = R.tx-R.x, dy = R.ty-R.y, d = Math.hypot(dx, dy);
@@ -3648,9 +3658,9 @@ function drawRemoteDyn(bt){
   const L = R.look;
   if (R.inMech) rig(bt, R.x, R.y, R.face, {s:L.sc, body:L.m[0], dark:L.m[1], head:L.m[2], visor:L.A.Head || '#5fe0ff', light:'#7ee08a',
     armor:L.A, kinds:L.K, zones:L.Zn, antenna:true, gun:{kind:L.K.Weapon, tier:L.wt, aim:R.aim, col:L.A.Weapon || '#5fe0ff', flash:R.shoot && Math.floor(clock*20)%2 === 0},
-    walk:R.fly ? 0 : R.walk, amp:R.fly ? 0 : R.amp, flying:R.fly, dashing:R.fly, swing:R.swing});
+    walk:R.fly ? 0 : R.walk, amp:R.fly ? 0 : R.amp, flying:R.fly, dashing:R.fly, swing:R.swing, hit:FOE.hitT > 0});
   else rig(bt, R.x, R.y, R.face, {s:PILOT_S, pilot:true, body:L.p[0], dark:L.p[1], head:L.p[2], pack:L.p[3], visor:L.p[4], accent:L.p[5], light:'#7ee08a',
-    antenna:true, gun:{kind:'Pilot', col:'#5fe0ff'}, aimArm:R.shoot, walk:R.walk, amp:R.amp});
+    antenna:true, gun:{kind:'Pilot', col:'#5fe0ff'}, aimArm:R.shoot, walk:R.walk, amp:R.amp, hit:FOE.hitT > 0});
 }
 function drawFriendBaseDyn(bt){
   const sd = NET.side; if (!sd || !FRIEND_SIDES.includes(sd) || NET.status !== 'online') return;
@@ -3670,11 +3680,92 @@ function drawFriendBaseDyn(bt){
 function netLabels(){
   const R = NET.R; if (!R || !R.seen || R.dead || !R.look || Math.hypot(R.x-P.x, R.y-P.y) > 1400) return;
   const p = proj(R.x, R.inMech ? 42*R.look.sc : 24, R.y); if (!p) return;
-  text(R.name, p.x, p.y-12, '#7ee08a', 8, 'center');
-  if (R.inMech && R.look.pw) text('POWER ' + R.look.pw, p.x, p.y-2, '#c9d2e3', 8, 'center');
+  const live = pvpLive();
+  text(R.name, p.x, p.y-12, live ? '#ff6b6b' : '#7ee08a', 8, 'center');
+  if (R.safe && inPvpArea(R.y)) text('SPAWN SHIELD', p.x, p.y-2, '#9be7ff', 8, 'center');
+  else if (live || (R.hp ?? 1) < 1){ px(p.x-20, p.y-1, 40, 4, '#000'); px(p.x-20, p.y-1, 40*(R.hp ?? 1), 4, live ? '#ff3b3b' : '#7ee08a'); }
+  else if (R.inMech && R.look.pw) text('POWER ' + R.look.pw, p.x, p.y-2, '#c9d2e3', 8, 'center');
+}
+// ---------- PvP: always on outside the two bases ----------
+// The attacker's game decides what hit; the victim's game applies the damage to itself (scaled and capped),
+// and tells the attacker when it went down. Being defeated only sends you home: nothing is lost.
+const PVP_DMG = 0.3, PVP_CAP = 0.25, PVP_SAFE = 5, PVP_BOUNTY_CD = 120;
+const FOE = {pvp:true, x:0, y:0, r:14, dead:true, size:4, sc:1, hitT:0};
+const inPvpArea = y => y < -24;                       // everything north of the base walls: bridges, zones, arenas
+const pvpLive = () => NET.status === 'online' && !!NET.R && NET.R.seen && !NET.R.dead && !NET.R.safe && !P.dead && inPvpArea(NET.R.y) && inPvpArea(P.y);
+const targets = () => FOE.dead ? enemies : enemies.concat(FOE);
+function pvpHit(d, crit){
+  if (!pvpLive()) return;
+  netSend({t:'hit', d:Math.max(1, Math.round(d)), c:crit ? 1 : 0});
+  NET.lastHitT = clock; FOE.hitT = 0.12;
+  hitMark = crit ? -0.16 : 0.12; sfx(crit ? 'crit' : 'hit');
+  if (P.inMech && ST.vamp && !P.dead) P.hp = Math.min(ST.maxhp, P.hp + d*PVP_DMG*ST.vamp);
+  floater(FOE.x, FOE.y, crit ? 'CRIT HIT' : 'HIT', crit ? '#ffd23f' : '#ff8c7a', NET.R && NET.R.inMech ? 60 : 28, crit ? 12 : 0);
+}
+function pvpTakeHit(m){
+  if (NET.status !== 'online' || P.dead || !inPvpArea(P.y) || clock < (P.pvpSafe||0)) return;
+  const d = Math.min(num(m.d, 0, 1e9, 0)*PVP_DMG, (CS().maxhp || 60)*PVP_CAP);
+  if (d > 0) hurtPlayer(d, null, true);
+}
+function pvpDefeat(){
+  const by = NET.R ? NET.R.name : 'Your friend';
+  netSend({t:'ko'}); S.pvpDeaths = (S.pvpDeaths||0) + 1;
+  burst(P.x, P.y, '#ff5d4a', 40, 220); ring(P.x, P.y, '#ff5d4a', 60); sfx('bigboom');
+  if (wave) endWave(false);
+  if (flee){ flee = null; for (const e of enemies) if (e.kind === 'chaser') despawn(e); note('You dropped the crate you were carrying!', '#ff6b6b'); }
+  P.fly = false; P.melee = null; firing = false;
+  teleport(SPAWN.x, SPAWN.y, -Math.PI/2);
+  P.hp = CS().maxhp; if (P.inMech) P.shield = ST.shield; P.hurtT = 0; P.pvpSafe = clock + PVP_SAFE;
+  note(by + ' ambushed you! You are back at base. Nothing was lost.', '#ff8c7a');
+  save();
+}
+function pvpScored(){
+  if (clock - (NET.lastHitT ?? -1e9) > 6) return;      // only count a knockout we actually took part in
+  NET.lastHitT = -1e9;
+  const name = NET.R ? NET.R.name : 'your friend';
+  S.pvpKills = (S.pvpKills||0) + 1;
+  let msg = 'You took down ' + name + '!';
+  if (clock - (NET.lastBounty ?? -1e9) > PVP_BOUNTY_CD){ NET.lastBounty = clock; const b = 50*Math.max(1, S.maxArea||1); S.scrap += b; msg += ' +' + b + ' scrap'; sfx('coin'); }
+  else msg += ' (scrap bonus again in ' + fmt(PVP_BOUNTY_CD - (clock - NET.lastBounty)) + ')';
+  burst(FOE.x, FOE.y, '#ff5d4a', 40, 220); ring(FOE.x, FOE.y, '#ffcf3a', 60); shake = Math.max(shake, 2);
+  note(msg, '#7ee08a'); save();
+}
+// show the friend our shots (pictures only), so an ambush can be seen coming
+function netShots(nb, nbm, nbo){
+  const R = NET.R; if (NET.status !== 'online' || !R || !R.seen || Math.hypot(R.x-P.x, R.y-P.y) > 1600) return;
+  const r1 = Math.round, l = [];
+  for (const b of bullets.slice(nb, nb+12)) l.push(b.mortar ? [r1(b.x), r1(b.y), r1(b.h), 0, 0, +b.life.toFixed(2), b.col, b.r, b.splash||0, r1(b.mortar.tx), r1(b.mortar.ty), +b.mortar.T.toFixed(2)]
+    : [r1(b.x), r1(b.y), r1(b.h), r1(b.vx), r1(b.vy), +b.life.toFixed(2), b.col, b.r, b.splash||0]);
+  const bm = beams.slice(nbm, nbm+4).map(b => [r1(b.x0), r1(b.y0), r1(b.x1), r1(b.y1), r1(b.h), b.col]);
+  const bo = bolts.slice(nbo, nbo+6).map(b => [r1(b.x0), r1(b.y0), r1(b.x1), r1(b.y1), r1(b.h)]);
+  if (l.length || bm.length || bo.length) netSend({t:'fx', l, bm, bo});
+}
+function netFx(m){
+  const n = (v, d) => num(v, -1e5, 1e5, d), list = (a, k) => Array.isArray(a) ? a.slice(0, k).filter(Array.isArray) : [];
+  for (const q of list(m.l, 12)){
+    const y = n(q[1], 0), x = mapIn(n(q[0], 0), y), col = okCol(q[6]) || '#ff8c7a', splash = num(q[8], 0, 200, 0);
+    const b = {x, y, h:num(q[2], 0, 400, 10), vx:num(q[3], -2000, 2000, 0), vy:num(q[4], -2000, 2000, 0), life:num(q[5], 0, 5, 0.5), dmg:0, from:'fx', col, r:num(q[7], 1, 10, 3)};
+    if (splash) b.splash = splash;
+    if (q.length >= 12){ const ty = n(q[10], y); b.mortar = {sx:x, sy:y, sh:b.h, tx:mapIn(n(q[9], x), ty), ty, t:0, T:num(q[11], 0.1, 3, 0.8)}; b.rocket = true; }
+    bullets.push(b);
+  }
+  for (const q of list(m.bm, 4)){ const y0 = n(q[1], 0), y1 = n(q[3], 0); beams.push({x0:mapIn(n(q[0], 0), y0), y0, x1:mapIn(n(q[2], 0), y1), y1, h:num(q[4], 0, 400, 20), t:0.09, col:okCol(q[5]) || '#ff8c7a'}); }
+  for (const q of list(m.bo, 6)){ const y0 = n(q[1], 0), y1 = n(q[3], 0); bolts.push({x0:mapIn(n(q[0], 0), y0), y0, x1:mapIn(n(q[2], 0), y1), y1, h:num(q[4], 0, 400, 20), t:0.14}); }
+}
+function pvpTick(dt){
+  const R = NET.R;
+  FOE.hitT = Math.max(0, FOE.hitT - dt);
+  if (R){ FOE.x = R.x; FOE.y = R.y; FOE.r = R.inMech ? 15 : 7; }
+  FOE.dead = !pvpLive();
+  if (NET.status === 'online' && !P.dead && inPvpArea(P.y) && !NET.pvpWarned){
+    NET.pvpWarned = true;
+    note('PvP zone! Outside the bases ' + (R ? R.name : 'your friend') + ' can ambush you, and you can ambush them.', '#ff8c7a');
+  }
 }
 function netBadge(){
-  if (NET.status === 'online') text('ONLINE: ' + (NET.R ? NET.R.name : 'FRIEND'), W-6, 112, '#7ee08a', 8, 'right');
+  const pv = (S.pvpKills || S.pvpDeaths) ? '  PVP ' + (S.pvpKills||0) + '-' + (S.pvpDeaths||0) : '';
+  if (NET.status === 'online') text('ONLINE: ' + (NET.R ? NET.R.name : 'FRIEND') + pv, W-6, 112, '#7ee08a', 8, 'right');
+  if (NET.status === 'online' && inPvpArea(P.y) && !P.dead) text(clock < (P.pvpSafe||0) ? 'SPAWN SHIELD' : 'PVP ZONE', W-6, 122, clock < (P.pvpSafe||0) ? '#9be7ff' : '#ff6b6b', 8, 'right');
   else if (NET.status === 'waiting') text('HOSTING  CODE ' + NET.code, W-6, 112, '#ffcf3a', 8, 'right');
   else if (NET.status === 'connecting') text('CONNECTING...', W-6, 112, '#c9d2e3', 8, 'right');
 }
