@@ -14,7 +14,7 @@
    COLOUR and TYPE: deep ink panels, steel blue edges, hazard yellow accent; Pixelify Sans + Silkscreen.
    LAYOUT: title bar with live chips, the stage, controls row, touch pad on phones. */
 :root{
-  --ink:#1d3b7a; --panel:#24489a; --panel2:#2e58b4; --line:#7fb2ff; --text:#ffffff; --dim:#cfe0ff;
+  --ink:#0a0e18; --panel:#121a2b; --panel2:#1b2740; --line:#3c6aa8; --text:#ffffff; --dim:#a9bddb;
   --hazard:#ffcf3a; --ember:#ff5d4a; --moss:#7ee08a; --steel:#8fb3e0; --cyan:#5fe0ff;
   --f-ui:'Pixelify Sans',ui-monospace,Menlo,Consolas,monospace;
   --f-label:'Silkscreen',ui-monospace,Menlo,Consolas,monospace;
@@ -618,7 +618,7 @@ function buildWorld(){
     signs.push({x:0,y:bot-90,text:'ZONE '+i+': '+zn.n.toUpperCase(),col:zn.acc,size:16, sub2:TIERS[ZONE_RSTART[i-1]].r.toUpperCase()+' TO '+TIERS[ZONE_RSTART[i-1]+4].r.toUpperCase()+' CRATES'});
     const rg = mulberry(1000+i*77);
     let placed = 0, tries = 0;
-    while (placed < 70 && tries < 900){
+    while (placed < 42 && tries < 900){
       tries++;
       const type = zn.deco[Math.floor(rg()*zn.deco.length)];
       if (type === 'lava') continue;
@@ -646,7 +646,7 @@ function buildWorld(){
       addObs(o); placed++;
     }
     for (let k=0;k<16;k++){
-      const x = rr(-Z/2+80,Z/2-80,rg), y = rr(top+80,bot-80,rg);
+      const x = rr(-Z/2+80,Z/2-80,rg), y = rr(top+80,bot-80,rg); if (k % 2) continue;
       if (circleHits(x,y,40) || Math.hypot(x, y-(top+Z/2)) < 360) continue;
       lamps.push(addObs({x:x-4,y:y-4,w:8,h:8,type:'lamp',col:zn.acc,zone:i}));
     }
@@ -2195,7 +2195,7 @@ layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNorm;
 layout(location=2) in vec3 iPos; layout(location=3) in vec3 iSize; layout(location=4) in float iYaw;
 layout(location=5) in vec3 iCol; layout(location=6) in float iMode; layout(location=7) in float iPitch;
 uniform mat4 uVP;
-out vec3 vW; out vec3 vN; out vec3 vC; out vec3 vL; flat out float vM;
+out vec3 vW; out vec3 vN; out vec3 vC; out vec3 vL; out vec3 vS; flat out float vM; flat out vec2 vYP;
 void main(){
   float c = cos(iYaw), s = sin(iYaw);
   vec3 l = aPos * iSize; vec3 nn = aNorm / max(iSize, vec3(0.0001));
@@ -2208,33 +2208,61 @@ void main(){
   }
   vec3 w = vec3(l.x*c - l.z*s, l.y, l.x*s + l.z*c) + iPos;
   vN = vec3(nn.x*c - nn.z*s, nn.y, nn.x*s + nn.z*c);
-  vW = w; vC = iCol; vM = iMode; vL = aPos;
+  vW = w; vC = iCol; vM = iMode; vL = aPos; vS = iSize; vYP = vec2(iYaw, iPitch);
   gl_Position = uVP * vec4(w, 1.0);
 }`;
 const FS = `#version 300 es
 precision highp float;
-in vec3 vW; in vec3 vN; in vec3 vC; in vec3 vL; flat in float vM;
+in vec3 vW; in vec3 vN; in vec3 vC; in vec3 vL; in vec3 vS; flat in float vM; flat in vec2 vYP;
+uniform int uKind;
 uniform vec3 uSun, uSunCol, uSky, uGround, uFog, uFogTop, uCam; uniform float uFogNear, uFogFar, uAmbK;
 uniform vec4 uL[12]; uniform vec3 uLC[12]; uniform int uNL;
 out vec4 o;
 float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
   return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
+// soft rounded edges for boxes and cylinders: bend the normal near each edge, as if the edge were bevelled
+vec3 roundN(vec3 n){
+  if (uKind == 2) return n;
+  vec3 q = (vL - vec3(0.0, 0.5, 0.0)) * vS, h = vS * 0.5;
+  float r = min(min(min(vS.x, vS.y), vS.z) * 0.26, 5.0);
+  if (r < 0.35) return n;
+  vec3 g;
+  if (uKind == 0) g = max(vec3(r) - (h - abs(q)), 0.0) * sign(q);
+  else {
+    float ru = length(vL.xz), R0 = min(h.x, h.z);
+    vec2 dir = ru > 1e-4 ? vL.xz / ru : vec2(0.0);
+    float gr = max(r - (0.5 - ru) * 2.0 * R0, 0.0), gy = max(r - (h.y - abs(q.y)), 0.0) * sign(q.y);
+    g = vec3(dir.x * gr, gy, dir.y * gr);
+  }
+  if (dot(g, g) < 1e-6) return n;
+  vec3 ln = normalize(g);
+  float cp = cos(vYP.y), sp = sin(vYP.y); ln = vec3(ln.x*cp - ln.y*sp, ln.x*sp + ln.y*cp, ln.z);
+  float c = cos(vYP.x), s = sin(vYP.x);
+  return normalize(vec3(ln.x*c - ln.z*s, ln.y, ln.x*s + ln.z*c));
+}
+vec3 grade(vec3 c){
+  c = clamp(c, 0.0, 1.0);
+  float l = dot(c, vec3(0.299, 0.587, 0.114));
+  c = clamp(mix(vec3(l), c, 1.16), 0.0, 1.0);          // a little more colour
+  return mix(c, c*c*(3.0 - 2.0*c), 0.32);               // gentle S-curve: deeper shadows, brighter highlights
+}
 void main(){
   if (vM > 3.5 && vM < 4.5){
     vec3 d = normalize(vW - uCam); float t = clamp(d.y*1.8, 0.0, 1.0);
     vec3 c = mix(uFog, uFogTop, sqrt(t));
     c += uSunCol * pow(max(dot(d, uSun), 0.0), 300.0) * 1.6 + uSunCol * pow(max(dot(d, uSun), 0.0), 12.0) * 0.12;
-    o = vec4(c, 1.0); return;
+    o = vec4(grade(c), 1.0); return;
   }
   if (vM > 2.5 && vM < 3.5){
     float d = length(vL.xz) * 2.0;
     o = vec4(0.0, 0.0, 0.0, (1.0 - smoothstep(0.25, 1.0, d)) * 0.42); return;
   }
   vec3 n = normalize(vN); vec3 V = normalize(uCam - vW);
+  if (vM < 1.5 || vM > 4.5) n = roundN(n);
   if (vM > 4.5){
     float fr = pow(1.0 - abs(dot(n, V)), 2.0);
-    o = vec4(vC * (0.5 + fr*1.5), 0.08 + fr*0.55); return;
+    o = vec4(grade(vC * (0.5 + fr*1.5)), 0.08 + fr*0.55); return;
   }
   vec3 col = vC; float spec = 0.45, gloss = 40.0;
   if (vM > 1.5 && vM < 2.5){
@@ -2245,7 +2273,7 @@ void main(){
     spec = 0.06; gloss = 10.0;
   }
   vec3 lit;
-  if (vM > 0.5 && vM < 1.5){ lit = col * 1.3; }
+  if (vM > 0.5 && vM < 1.5){ float fr = pow(1.0 - abs(dot(n, V)), 2.0); lit = col * (1.25 + fr*0.5) + vec3(fr*0.15); }   // glowing parts
   else {
     vec3 amb = mix(uGround, uSky, n.y*0.5 + 0.5) * uAmbK;
     float nd = max(dot(n, uSun), 0.0);
@@ -2258,14 +2286,14 @@ void main(){
       Lt += uLC[i] * a * max(dot(n, ld)*0.7 + 0.3, 0.0);
       Sp += uLC[i] * a * pow(max(dot(n, normalize(ld + V)), 0.0), gloss) * spec;
     }
-    float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0) * 0.22;
+    float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0) * 0.32;
     float ao = mix(0.72, 1.0, clamp(vW.y / 14.0, 0.0, 1.0));
     lit = col * Lt * ao + Sp + uSky * rim * uAmbK;
   }
   float fd = length(vW - uCam);
   float fg = clamp((fd - uFogNear) / (uFogFar - uFogNear), 0.0, 1.0); fg = fg*fg*(3.0 - 2.0*fg);
   vec3 fc = mix(uFog, uFogTop, clamp((vW.y - uCam.y) / 600.0, 0.0, 0.5));
-  o = vec4(mix(lit, fc, fg), 1.0);
+  o = vec4(grade(mix(lit, fc, fg)), 1.0);
 }`;
 let prog = null, U = {};
 const STRIDE = 12;
@@ -2321,8 +2349,8 @@ function initGL(){
   gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
   gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
-  for (const n of ['uVP','uSun','uSunCol','uSky','uGround','uFog','uFogTop','uCam','uFogNear','uFogFar','uAmbK','uL','uLC','uNL']) U[n] = gl.getUniformLocation(prog, n);
-  for (const [k, data] of [['b', meshCube()], ['c', meshCyl(16)], ['s', meshSph(16, 10)]]){
+  for (const n of ['uKind','uVP','uSun','uSunCol','uSky','uGround','uFog','uFogTop','uCam','uFogNear','uFogFar','uAmbK','uL','uLC','uNL']) U[n] = gl.getUniformLocation(prog, n);
+  for (const [k, data] of [['b', meshCube()], ['c', meshCyl(36)], ['s', meshSph(28, 18)]]){
     const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
     MESH[k] = {buf, count: data.length/6};
   }
@@ -2342,7 +2370,7 @@ function initGL(){
   return true;
 }
 function upload(name, set, usage){ for (const k of ['b','c','s']){ gl.bindBuffer(gl.ARRAY_BUFFER, BUF[name][k]); gl.bufferData(gl.ARRAY_BUFFER, set[k].a.subarray(0, set[k].n*STRIDE), usage); } }
-function drawSet(name, set){ for (const k of ['b','c','s']){ if (!set[k].n) continue; gl.bindVertexArray(VAO[name][k]); gl.drawArraysInstanced(gl.TRIANGLES, 0, MESH[k].count, set[k].n); } }
+function drawSet(name, set){ for (const k of ['b','c','s']){ if (!set[k].n) continue; gl.uniform1i(U.uKind, k === 'b' ? 0 : k === 'c' ? 1 : 2); gl.bindVertexArray(VAO[name][k]); gl.drawArraysInstanced(gl.TRIANGLES, 0, MESH[k].count, set[k].n); } }
 function uploadStatic(){ upload('STATIC', STATIC, gl.STATIC_DRAW); }
 function applyStyle(){
   BLOCKY = S.style === 'blocky';
@@ -2375,7 +2403,7 @@ function drawBaseStatic(bt){
   sph(bt, FOUNTAIN.x, FOUNTAIN.y, 66, 26, 26, 26, 0, '#ffcf3a', 1);
   // flower beds
   const fr = mulberry(55);
-  for (let k=0;k<160;k++){ const x = rr(-760, 760, fr), y = rr(40, 1560, fr);
+  for (let k=0;k<160;k++){ const x = rr(-760, 760, fr), y = rr(40, 1560, fr); if (k % 2) continue;
     if (Math.abs(x) < 120 || (Math.abs(x-HANGAR.x) < 320 && Math.abs(y-HANGAR.y) < 320) || Math.hypot(x-FOUNTAIN.x, y-FOUNTAIN.y) < 280 || (y > BELT_Y0-80 && y < BELT_Y1+80) || (x > 330 && x < 760 && y > 760 && y < 1260) || Math.abs(y-520) < 60) continue;
     sph(bt, x, y, 0, 5, 4, 5, 0, ['#ff6b9a','#ffd23f','#ffffff','#b46cff','#ff9a4a'][k%5]); cyl(bt, x, y, 0, 1, 3, 1, 0, '#3d8f3a'); }
   // conveyor + machines
@@ -3165,8 +3193,8 @@ function render3D(){
   if (vis) nightK *= 0.45;
   const zi = zoneAt(P.x,P.y), acc = zi ? rgb(ZONES[zi-1].acc) : [0.6,0.75,0.9];
   const dusk = !isNight && phaseLeft < 30 ? (30-phaseLeft)/30 : 0;
-  let horizon = mixA(mixA([0.74,0.9,1.0], acc, 0.06), [0.18,0.2,0.42], nightK);
-  let zenith = mixA([0.22,0.6,1.0], [0.05,0.06,0.2], nightK);
+  let horizon = mixA(mixA([0.66,0.83,0.98], acc, 0.08), [0.14,0.16,0.36], nightK);
+  let zenith = mixA([0.13,0.42,0.9], [0.03,0.04,0.16], nightK);
   if (dusk){ horizon = mixA(horizon, [0.98,0.6,0.38], 0.45*dusk); zenith = mixA(zenith, [0.35,0.3,0.55], 0.4*dusk); }
   const fx = Math.cos(camYaw), fz = Math.sin(camYaw), cp = Math.cos(camPitch), sp = Math.sin(camPitch);
   camZoom += ((P.inMech ? 1 : 0) - camZoom) * 0.08;
@@ -3194,13 +3222,13 @@ function render3D(){
   gl.uniformMatrix4fv(U.uVP, false, new Float32Array(VP));
   const sd = [0.45, 0.62, 0.35], sl = Math.hypot(...sd);
   gl.uniform3f(U.uSun, sd[0]/sl, sd[1]/sl, sd[2]/sl);
-  let sunC = mixA([1.0,0.97,0.9].map(v=>v*1.0), [0.3,0.34,0.6], nightK); if (dusk) sunC = mixA(sunC, [1.0,0.62,0.4], 0.5*dusk);
+  let sunC = mixA([1.0,0.96,0.88].map(v=>v*1.08), [0.3,0.34,0.6], nightK); if (dusk) sunC = mixA(sunC, [1.0,0.62,0.4], 0.5*dusk);
   gl.uniform3f(U.uSunCol, ...sunC);
   gl.uniform3f(U.uSky, ...mixA([0.85,0.92,1.0], [0.3,0.32,0.55], nightK));
   gl.uniform3f(U.uGround, ...mixA([0.6,0.7,0.5], [0.15,0.14,0.2], nightK));
-  gl.uniform1f(U.uAmbK, 0.82 - nightK*0.42);
+  gl.uniform1f(U.uAmbK, 0.74 - nightK*0.38);
   gl.uniform3f(U.uFog, ...horizon); gl.uniform3f(U.uFogTop, ...zenith); gl.uniform3f(U.uCam, ...EYE);
-  gl.uniform1f(U.uFogNear, 750 - 250*nightK); gl.uniform1f(U.uFogFar, 2600 - 900*nightK);
+  gl.uniform1f(U.uFogNear, 950 - 300*nightK); gl.uniform1f(U.uFogFar, 3000 - 1000*nightK);
   const Ls = [], LC = [];
   Ls.push(P.x, P.inMech ? 50 : 30, P.y, vis ? 420 : 240); LC.push(...[1,0.92,0.75].map(v => v*(0.12+nightK*1.1)));
   if (nightK > 0.05){
@@ -3320,9 +3348,12 @@ function drawMinimap(){
     for (let k=2;k<8;k++) px(ppx+Math.cos(camYaw)*k, ppy+Math.sin(camYaw)*k, 1,1,'#fff'); px(ppx-1.5, ppy-1.5, 3,3,'#ffffff'); }
   text('Z'+zi+' '+zn.n.toUpperCase(), mx+S2/2, my+S2+2, zn.acc, 8, 'center');
 }
+let VIGNETTE = null;
 function drawHUD(){
   ctx.setTransform(2,0,0,2,0,0);
   ctx.clearRect(0,0,W,H);
+  if (!VIGNETTE){ VIGNETTE = ctx.createRadialGradient(W/2, H/2, H*0.42, W/2, H/2, H*0.98); VIGNETTE.addColorStop(0, 'rgba(0,0,0,0)'); VIGNETTE.addColorStop(1, 'rgba(4,8,20,.42)'); }
+  ctx.fillStyle = VIGNETTE; ctx.fillRect(0, 0, W, H);
   if (flashT > 0){ ctx.globalAlpha = Math.min(0.45, flashT*0.9); ctx.fillStyle = flashCol; ctx.fillRect(0,0,W,H); ctx.globalAlpha = 1; }
   if (reveals.length){ // crate opening reveal: the part card spins in, glows in its rarity color, then flies off
     const rv = reveals[0]; rv.t += 1/60; const p = rv.p, col = TIERS[p.tier].c, t = rv.t, dur = p.tier >= 5 ? 1.9 : 1.2;
@@ -3345,7 +3376,7 @@ function drawHUD(){
     px(cx-1,cy-7,2,4,cc); px(cx-1,cy+3,2,4,cc); px(cx-7,cy-1,4,2,cc); px(cx+3,cy-1,4,2,cc);
     if (lockOn){ ctx.strokeStyle = '#ff5d4a'; ctx.lineWidth = 1; ctx.strokeRect(cx-9.5, cy-9.5, 19, 19); } }
   }
-  px(6,6,150,63,'rgba(24,70,170,.78)');
+  px(6,6,150,63,'rgba(8,12,24,.58)');
   px(10,10,142,8,'#2a0f0f'); const mhp = CS().maxhp;
   px(10,10,142*Math.max(0,P.hp/mhp),8, P.hp/mhp > 0.35 ? '#7ee08a' : '#ff5d4a');
   text((P.inMech ? 'MECH ' : 'PILOT ')+Math.ceil(Math.max(0,P.hp))+' / '+mhp, 81, 10, '#fff', 8, 'center');
@@ -3358,7 +3389,7 @@ function drawHUD(){
   px(10,65,142,3,'#0b1a22'); px(10,65,142*Math.min(1,(S.xp||0)/xpNeed(S.lvl||1)),3,'#ffd23f');
   const ms = !S.mechBuilt ? 'NO MECH YET: GO TO WORKSHOP' : P.inMech ? 'IN MECH  (R TO HOP OUT)' : MECH.state === 'repair' ? 'MECH REPAIRING '+Math.ceil(MECH.repairT)+'S' : 'MECH PARKED '+Math.ceil(MECH.hp)+'/'+ST.maxhp;
   text(ms, 10, 55, P.inMech ? '#5fe0ff' : !S.mechBuilt ? '#ffcf3a' : '#c9d2e3');
-  px(W/2-80,6,160,16,'rgba(24,70,170,.78)');
+  px(W/2-80,6,160,16,'rgba(8,12,24,.58)');
   if (isNight){ px(W/2-72,10,7,7,'#cfd6ff'); px(W/2-69,9,6,6,'#0b0e15'); } else px(W/2-73,10,7,7,'#ffcf3a');
   text(isNight ? 'NIGHT  DAY IN '+fmt(phaseLeft) : 'DAY  NIGHT IN '+fmt(phaseLeft), W/2+6, 10, isNight ? '#aab4ff' : '#ffcf3a', 8, 'center');
   if (wave){
@@ -3366,22 +3397,22 @@ function drawHUD(){
     text(wave.nextAt ? 'WAVE '+wave.cur+'/'+wave.total+' INCOMING' : 'WAVE '+wave.cur+'/'+wave.total+'  BOTS LEFT '+wave.alive, W/2, 30, '#ffd23f', 8, 'center');
     text('TIME '+fmt(wave.endsAt-clock), W/2, 41, '#fff', 8, 'center');
   }
-  px(6,H-20,90,14,'rgba(24,70,170,.78)');
+  px(6,H-20,90,14,'rgba(8,12,24,.58)');
   px(9,H-17,84*(1-P.pulseT/PULSE_CD),8, P.pulseT<=0 ? '#5fe0ff' : '#2b6f84');
   text(flee ? 'PULSE LOCKED' : P.pulseT<=0 ? 'Q PULSE READY' : 'PULSE '+Math.ceil(P.pulseT), 51, H-17, flee ? '#ff8c7a' : '#fff', 8, 'center');
   const abName = !P.inMech ? 'DODGE' : ST.K.Legs === 'Jet Wings' ? (P.fly ? 'LAND' : 'FLY') : ST.K.Legs === 'Thruster Legs' ? 'DASH' : ST.K.Legs === 'Piston Legs' ? 'SLAM' : ST.K.Legs === 'Spider Legs' ? 'WEB' : null;
-  if (abName){ px(100,H-20,90,14,'rgba(24,70,170,.78)'); px(103,H-17,84*(P.abT > 0 ? 1-P.abT/(P.inMech ? (abName==='SLAM'?5:abName==='WEB'?4:ST.dashCd) : 1.4) : 1),8, P.abT<=0 ? '#ffcf3a' : '#7a6420');
+  if (abName){ px(100,H-20,90,14,'rgba(8,12,24,.58)'); px(103,H-17,84*(P.abT > 0 ? 1-P.abT/(P.inMech ? (abName==='SLAM'?5:abName==='WEB'?4:ST.dashCd) : 1.4) : 1),8, P.abT<=0 ? '#ffcf3a' : '#7a6420');
     text(P.abT<=0 ? 'SPACE '+abName : abName+' '+Math.ceil(P.abT), 145, H-17, '#fff', 8, 'center'); }
   if (P.onTread) text((S.speedLvl||0) >= P.onTread.need ? 'PRESS E: TREADMILL MINIGAMES (TRAIN FASTER)' : 'NEEDS SPEED LEVEL '+P.onTread.need, W/2, H-74, '#ff9a2e', 8, 'center');
-  if (P.inMech && ST.K.Legs === 'Jet Wings'){ px(100,H-30,90,8,'rgba(24,70,170,.78)'); px(102,H-28,86*(P.fuel??1),4, P.fly ? '#ffb347' : '#9be7ff'); text('FUEL', 100, H-40, '#9be7ff', 8); }
+  if (P.inMech && ST.K.Legs === 'Jet Wings'){ px(100,H-30,90,8,'rgba(8,12,24,.58)'); px(102,H-28,86*(P.fuel??1),4, P.fly ? '#ffb347' : '#9be7ff'); text('FUEL', 100, H-40, '#9be7ff', 8); }
   if (P.inMech && ST.shield > 0){ px(10,19,142,3,'#0b1a22'); px(10,19,142*P.shield/ST.shield,3,'#5fe0ff'); }
   if (P.odT > 0 && P.inMech) text('OVERDRIVE '+Math.ceil(P.odT), W/2, 56, '#ff9a2e', 8, 'center');
   let ny = 74;
   ctx.font = '8px Silkscreen, ui-monospace, monospace';
-  for (const n of notes){
+  for (const n of notes.slice(-3)){
     ctx.globalAlpha = Math.min(1, n.t);
     const w = Math.min(330, ctx.measureText(n.text).width + 8);
-    px(6, ny, w, 12, 'rgba(24,70,170,.72)'); text(n.text, 10, ny+2, n.col);
+    px(6, ny, w, 12, 'rgba(8,12,24,.5)'); text(n.text, 10, ny+2, n.col);
     ctx.globalAlpha = 1; ny += 14;
   }
   let prompt = null;
@@ -3389,11 +3420,11 @@ function drawHUD(){
   if (!P.inMech && S.mechBuilt && MECH.state === 'parked' && Math.hypot(MECH.x-P.x,MECH.y-P.y) < 46) prompt = isTouch ? 'TAP MECH TO GET IN' : 'PRESS R TO GET IN YOUR MECH';
   if (!S.mechBuilt && Math.hypot(HANGAR.x-P.x,HANGAR.y-P.y) < 90) prompt = isTouch ? 'TAP BAY TO BUILD YOUR MECH' : 'PRESS B TO BUILD YOUR MECH';
   const nb = nearBelt(); if (nb){ prompt = (isTouch ? 'TAP OPEN' : 'PRESS E') + ' TO BUY '+nb.p.name.toUpperCase()+' FOR '+nb.price; text(perkText(nb.p).toUpperCase(), W/2, H-58, '#c9d2e3', 8, 'center'); }
-  if (prompt){ ctx.font = '8px Silkscreen, ui-monospace, monospace'; const w = ctx.measureText(prompt).width+12; px(W/2-w/2, H-46, w, 14, 'rgba(24,70,170,.85)'); text(prompt, W/2, H-43, '#ffcf3a', 8, 'center'); }
+  if (prompt){ ctx.font = '8px Silkscreen, ui-monospace, monospace'; const w = ctx.measureText(prompt).width+12; px(W/2-w/2, H-46, w, 14, 'rgba(8,12,24,.7)'); text(prompt, W/2, H-43, '#ffcf3a', 8, 'center'); }
   if (!isTouch && !paused() && !P.dead){
-    if (shiftLock){ px(W-104, H-20, 98, 14, 'rgba(24,70,170,.78)'); text('SHIFT LOCK ON', W-55, H-17, '#5fe0ff', 8, 'center');
+    if (shiftLock){ px(W-104, H-20, 98, 14, 'rgba(8,12,24,.58)'); text('SHIFT LOCK ON', W-55, H-17, '#5fe0ff', 8, 'center');
       if (!locked) text('MOVE MOUSE LEFT / RIGHT TO TURN', W/2, H-14, '#c9d2e3', 8, 'center'); }
-    else text('SHIFT: SHIFT LOCK   RIGHT-DRAG, Z/C OR 2-FINGER SWIPE: TURN', W/2+70, H-14, '#c9d2e3', 8, 'center');
+    else if (clock < 60) text('SHIFT: SHIFT LOCK   RIGHT-DRAG, Z/C OR 2-FINGER SWIPE: TURN', W/2+70, H-14, '#c9d2e3', 8, 'center');
   }
   if (stick){
     ctx.globalAlpha = 0.35; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
@@ -3422,7 +3453,7 @@ function drawHUD(){
   }
   drawMinimap(); netBadge();
   // missions under the minimap
-  { const mx = W-150, my = 120; px(mx-4, my-4, 148, 14 + S.missions.length*22, 'rgba(24,70,170,.78)');
+  if (!zoneAt(P.x,P.y) && !arenaAt(P.x,P.y) && P.y > -150 || missionFlash > 0) { const mx = W-150, my = 130; px(mx-4, my-4, 148, 14 + S.missions.length*22, 'rgba(8,12,24,.58)');
     text('MISSIONS', mx, my-1, missionFlash > 0 ? '#7ee08a' : '#ffcf3a');
     S.missions.forEach((m, i) => { const y = my + 11 + i*22;
       text(m.text.toUpperCase(), mx, y, '#c9d2e3');
