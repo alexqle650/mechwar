@@ -796,8 +796,8 @@ function addXp(n){
     S.scrap += bonus; ST = stats(); flash('#ffd23f', 0.5); sfx('power'); ring(P.x, P.y, '#ffd23f', 90); burst(P.x, P.y, '#ffd23f', 30, 220);
     note('LEVEL UP! You are level '+S.lvl+'. +1% damage, +'+bonus+' scrap', '#ffd23f'); }
 }
-function burst(x,y,col,n,spd){ for (let k=0;k<(n||10);k++){ const a=R()*6.283, s=rr(20,spd||120); parts.push({x,y,h:rr(4,18),vh:rr(30,150),vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rr(0.4,0.8),max:0.8,col,s:ri(1,3)}); } }
-function ring(x,y,col,rad){ parts.push({x,y,h:2,vh:0,vx:0,vy:0,life:0.35,max:0.35,col,ring:rad}); }
+function burst(x,y,col,n,spd,dull){ for (let k=0;k<(n||10);k++){ const a=R()*6.283, s=rr(20,spd||120); parts.push({x,y,h:rr(4,18),vh:rr(30,150),vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rr(0.4,0.8),max:0.8,col,s:ri(1,3),dull}); } }
+function ring(x,y,col,rad,dull){ parts.push({x,y,h:2,vh:0,vx:0,vy:0,life:0.35,max:0.35,col,ring:rad,dull}); }
 
 /* ================= crates ================= */
 function findSpot(zi, margin, rad){
@@ -1179,7 +1179,7 @@ function endWave(ok){
 const BELT_Y0 = 255, BELT_Y1 = 305, BELT_X0 = -500, BELT_X1 = 500;
 const PADS = [-375,-225,-75,75,225,375].map(x => ({x, y:520}));
 const SKINS = [
-  {train:1, n:'Default',  cost:0,    p:['#2f8f88','#1f2a33','#e8eef7','#ff9a2e','#5fe0ff','#ffcf3a'], m:['#6a7384','#3a404c','#8b95a6']},
+  {train:1, n:'Default',  cost:0,    p:['#3d444e','#1c2026','#59616c','#2a2e36','#ff8a3a','#ff7a2a'], m:['#4b525c','#1f2329','#59616c']},
   {train:1.2, n:'Crimson',  cost:300,  p:['#b0303a','#2a1d22','#f0e6e6','#2a2e36','#ffcf3a','#ffffff'], m:['#8a2f36','#2a1d22','#a8454c']},
   {train:1.2, n:'Jungle',   cost:300,  p:['#3f7a3a','#1f2a1c','#e8eedd','#8a6a3a','#9cff6a','#ffd23f'], m:['#556b3a','#2c3324','#6f8450']},
   {train:1.4, n:'Arctic',   cost:500,  p:['#dfe8f2','#5a6a80','#ffffff','#5aaeff','#5fe0ff','#9be7ff'], m:['#c9d6e4','#4a5a70','#e6eef7']},
@@ -1824,7 +1824,7 @@ function afterGearChange(){
 const angDiff = (a,b) => { let d = (a-b) % 6.2832; if (d > 3.1416) d -= 6.2832; if (d < -3.1416) d += 6.2832; return d; };
 function muzzle(){
   const rx = -Math.sin(P.face), ry = Math.cos(P.face), f = P.aim;
-  if (P.inMech){ const t = (partById(S.eq.Weapon)||{tier:0}).tier, len = (12+t*2)*mS(); return {x:P.x + rx*8.5*mS() + Math.cos(f)*len, y:P.y + ry*8.5*mS() + Math.sin(f)*len, h:18*mS() + (P.lift||0)}; }
+  if (P.inMech){ const t = (partById(S.eq.Weapon)||{tier:0}).tier, len = (16.5+t*2)*mS(); return {x:P.x + rx*9.8*mS() + Math.cos(f)*len, y:P.y + ry*9.8*mS() + Math.sin(f)*len, h:24*mS() + (P.lift||0)}; }
   return {x:P.x + rx*8.5*PILOT_S + Math.cos(f)*14*PILOT_S, y:P.y + ry*8.5*PILOT_S + Math.sin(f)*14*PILOT_S, h:17*PILOT_S};
 }
 function fire(){
@@ -2060,7 +2060,7 @@ function updatePlayer(dt){
     const step = Math.floor(P.walk/Math.PI);
     if (step !== lastStep && P.amp > 0.5){ lastStep = step; shake = 1.6; sfx('step');
       const zs = zoneAt(P.x,P.y), dc = zs ? shade(ZONES[zs-1].f1, 0.8) : '#b9ab8e', fx = P.x + rx*(step%2?8:-8)*mS()/1.45, fy = P.y + ry*(step%2?8:-8)*mS()/1.45;
-      burst(fx, fy, dc, 7, 60); ring(fx, fy, dc, 14*mS()/1.45); }
+      burst(fx, fy, dc, 4, 40, true); ring(fx, fy, dc, 16*mS()/1.45, true); }
   }
   shake = Math.max(0, shake - dt*8);
   // aim: crosshair in shift lock / touch, otherwise the spot under the mouse; then snap to a nearby bot
@@ -2219,7 +2219,7 @@ in vec3 vW; in vec3 vN; in vec3 vC; in vec3 vL; in vec3 vS; flat in float vM; fl
 uniform int uKind; uniform float uTime;
 uniform vec3 uSun, uSunCol, uSky, uGround, uFog, uFogTop, uCam; uniform float uFogNear, uFogFar, uAmbK;
 uniform vec4 uL[12]; uniform vec3 uLC[12]; uniform int uNL;
-out vec4 o;
+layout(location=0) out vec4 o; layout(location=1) out vec4 oE;   // oE: light that should bloom
 float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
   return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
@@ -2227,7 +2227,7 @@ float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
 vec3 roundN(vec3 n){
   if (uKind == 2) return n;
   vec3 q = (vL - vec3(0.0, 0.5, 0.0)) * vS, h = vS * 0.5;
-  float r = min(min(min(vS.x, vS.y), vS.z) * 0.26, 5.0);
+  float r = min(min(min(vS.x, vS.y), vS.z) * 0.13, 1.8);   // small chamfers: edges stay crisp but catch the light
   if (r < 0.35) return n;
   vec3 g;
   if (uKind == 0) g = max(vec3(r) - (h - abs(q)), 0.0) * sign(q);
@@ -2250,23 +2250,24 @@ vec3 grade(vec3 c){
   return mix(c, c*c*(3.0 - 2.0*c), 0.32);               // gentle S-curve: deeper shadows, brighter highlights
 }
 void main(){
+  oE = vec4(0.0, 0.0, 0.0, 1.0);
   if (vM > 3.5 && vM < 4.5){
     vec3 d = normalize(vW - uCam); float t = clamp(d.y*1.8, 0.0, 1.0);
     vec3 c = mix(uFog, uFogTop, sqrt(t));
     c += uSunCol * pow(max(dot(d, uSun), 0.0), 300.0) * 1.6 + uSunCol * pow(max(dot(d, uSun), 0.0), 12.0) * 0.12;
-    o = vec4(grade(c), 1.0); return;
+    o = vec4(grade(c), 1.0); oE = vec4(uSunCol * pow(max(dot(d, uSun), 0.0), 300.0) * 0.8, 1.0); return;
   }
   if (vM > 2.5 && vM < 3.5){
     float d = length(vL.xz) * 2.0;
-    o = vec4(0.0, 0.0, 0.0, (1.0 - smoothstep(0.25, 1.0, d)) * 0.42); return;
+    o = vec4(0.0, 0.0, 0.0, (1.0 - smoothstep(0.25, 1.0, d)) * 0.42); oE = vec4(0.0); return;
   }
   vec3 n = normalize(vN); vec3 V = normalize(uCam - vW);
   if (vM < 1.5 || vM > 4.5) n = roundN(n);
   if (vM > 4.5){
     float fr = pow(1.0 - abs(dot(n, V)), 2.0);
-    o = vec4(grade(vC * (0.5 + fr*1.5)), 0.08 + fr*0.55); return;
+    o = vec4(grade(vC * (0.5 + fr*1.5)), 0.08 + fr*0.55); oE = vec4(vC * (0.4 + fr*0.8), 0.08 + fr*0.55); return;
   }
-  vec3 col = vC; float spec = 0.45, gloss = 40.0;
+  vec3 col = vC; float spec = 0.62, gloss = 70.0;   // machined metal
   if (vM > 1.5 && vM < 2.5){
     float nz = vn(vW.xz/48.0)*0.55 + vn(vW.xz/11.0)*0.3 + vn(vW.xz/3.0)*0.15;
     col *= 0.82 + nz*0.3;
@@ -2276,7 +2277,7 @@ void main(){
   }
   vec3 lit;
   if (vM > 0.5 && vM < 1.5){ float fr = pow(1.0 - abs(dot(n, V)), 2.0), pul = 1.0 + 0.1*sin(uTime*4.0 + (vW.x + vW.z)*0.05);
-    lit = (col * (1.25 + fr*0.5) + vec3(fr*0.15)) * pul; }   // glowing parts, gently pulsing
+    lit = (col * (1.08 + fr*0.35) + vec3(fr*0.1)) * pul; }   // glowing parts, gently pulsing
   else {
     vec3 amb = mix(uGround, uSky, n.y*0.5 + 0.5) * uAmbK;
     float nd = max(dot(n, uSun), 0.0);
@@ -2291,12 +2292,13 @@ void main(){
     }
     float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0) * 0.32;
     float ao = mix(0.72, 1.0, clamp(vW.y / 14.0, 0.0, 1.0));
-    lit = col * Lt * ao + Sp + uSky * rim * uAmbK;
+    lit = col * Lt * ao + Sp + uSky * rim * uAmbK + mix(uGround, uSky, reflect(-V, n).y*0.5 + 0.5) * pow(1.0 - max(dot(n, V), 0.0), 4.0) * 0.22 * uAmbK;
   }
   float fd = length(vW - uCam);
   float fg = clamp((fd - uFogNear) / (uFogFar - uFogNear), 0.0, 1.0); fg = fg*fg*(3.0 - 2.0*fg);
   vec3 fc = mix(uFog, uFogTop, clamp((vW.y - uCam.y) / 600.0, 0.0, 0.5));
   o = vec4(grade(mix(lit, fc, fg)), 1.0);
+  if (vM > 0.5 && vM < 1.5) oE = vec4(lit * 0.58 * (1.0 - fg), 1.0);
 }`;
 let prog = null, U = {};
 const STRIDE = 12;
@@ -2372,6 +2374,75 @@ function initGL(){
   gl.enable(gl.DEPTH_TEST);
   return true;
 }
+// ---------- bloom: glowing parts are drawn into a second image, blurred small and smaller, and added on top ----------
+const FX = {ok:null, w:0, h:0};
+const FXVS = `#version 300 es
+out vec2 uv; void main(){ vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2)); uv = p; gl_Position = vec4(p*2.0 - 1.0, 0.0, 1.0); }`;
+const FXDOWN = `#version 300 es
+precision mediump float; uniform sampler2D T; uniform vec2 px; in vec2 uv; out vec4 o;
+void main(){ vec3 c = texture(T, uv + px*vec2(-1.0,-1.0)).rgb + texture(T, uv + px*vec2(1.0,-1.0)).rgb + texture(T, uv + px*vec2(-1.0,1.0)).rgb + texture(T, uv + px*vec2(1.0,1.0)).rgb; o = vec4(c*0.25, 1.0); }`;
+const FXBLUR = `#version 300 es
+precision mediump float; uniform sampler2D T; uniform vec2 dir; in vec2 uv; out vec4 o;
+void main(){ vec3 c = texture(T, uv).rgb*0.227; c += (texture(T, uv + dir*1.385).rgb + texture(T, uv - dir*1.385).rgb)*0.316; c += (texture(T, uv + dir*3.231).rgb + texture(T, uv - dir*3.231).rgb)*0.07; o = vec4(c, 1.0); }`;
+const FXMIX = `#version 300 es
+precision mediump float; uniform sampler2D S; uniform sampler2D B1; uniform sampler2D B2; uniform float k; in vec2 uv; out vec4 o;
+void main(){ vec3 c = texture(S, uv).rgb + texture(B1, uv).rgb*k + texture(B2, uv).rgb*k*1.1; o = vec4(c, 1.0); }`;
+function fxProg(fs){
+  const sh = (t, src) => { const x = gl.createShader(t); gl.shaderSource(x, src); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
+  const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, FXVS)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); return p;
+}
+function fxTex(w, h){ const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0); return {t, f, w, h}; }
+function fxSetup(w, h){
+  try {
+    if (!FX.progs){ FX.progs = {down:fxProg(FXDOWN), blur:fxProg(FXBLUR), mix:fxProg(FXMIX)}; FX.vao = gl.createVertexArray(); }
+    for (const k of ['ms','scene','emis','q1','q2','e1','e2']) if (FX[k]){ gl.deleteFramebuffer(FX[k].f); if (FX[k].t) gl.deleteTexture(FX[k].t); }
+    for (const r of FX.rbs || []) gl.deleteRenderbuffer(r);
+    const N = Math.min(4, gl.getParameter(gl.MAX_SAMPLES) || 0), rb = fmt => { const r = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, r);
+      if (N > 0) gl.renderbufferStorageMultisample(gl.RENDERBUFFER, N, fmt, w, h); else gl.renderbufferStorage(gl.RENDERBUFFER, fmt, w, h); return r; };
+    const c0 = rb(gl.RGBA8), c1 = rb(gl.RGBA8), dz = rb(gl.DEPTH_COMPONENT24); FX.rbs = [c0, c1, dz];
+    const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, c0); gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.RENDERBUFFER, c1);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, dz);
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('bloom framebuffer incomplete');
+    FX.ms = {f};
+    FX.scene = fxTex(w, h); FX.emis = fxTex(w, h);
+    const q = [Math.max(1, w >> 2), Math.max(1, h >> 2)], e = [Math.max(1, w >> 3), Math.max(1, h >> 3)];
+    FX.q1 = fxTex(...q); FX.q2 = fxTex(...q); FX.e1 = fxTex(...e); FX.e2 = fxTex(...e);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); FX.w = w; FX.h = h; FX.ok = true;
+  } catch(err){ console.warn('bloom off:', err); FX.ok = false; gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
+}
+function fxBegin(clear){
+  if (FX.ok === false || BLOCKY_NOFX) return false;
+  if (FX.w !== cv.width || FX.h !== cv.height || !FX.ok) fxSetup(cv.width, cv.height);
+  if (!FX.ok) return false;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, FX.ms.f); gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+  gl.viewport(0, 0, cv.width, cv.height);
+  gl.clearBufferfv(gl.COLOR, 0, [clear[0], clear[1], clear[2], 1]); gl.clearBufferfv(gl.COLOR, 1, [0, 0, 0, 0]); gl.clear(gl.DEPTH_BUFFER_BIT);
+  return true;
+}
+function fxPass(prog, dst, set){
+  gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.f : null); gl.viewport(0, 0, dst ? dst.w : cv.width, dst ? dst.h : cv.height);
+  gl.useProgram(prog); set(prog); gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+function fxEnd(){
+  const W2 = cv.width, H2 = cv.height;
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, FX.ms.f);
+  gl.readBuffer(gl.COLOR_ATTACHMENT0); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, FX.scene.f); gl.blitFramebuffer(0, 0, W2, H2, 0, 0, W2, H2, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+  gl.readBuffer(gl.COLOR_ATTACHMENT1); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, FX.emis.f); gl.blitFramebuffer(0, 0, W2, H2, 0, 0, W2, H2, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.bindVertexArray(FX.vao);
+  const P_ = FX.progs, tex = (prog, name, unit, t) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); gl.uniform1i(gl.getUniformLocation(prog, name), unit); };
+  const down = (src, dst) => fxPass(P_.down, dst, p => { tex(p, 'T', 0, src.t); gl.uniform2f(gl.getUniformLocation(p, 'px'), 0.5/dst.w, 0.5/dst.h); });
+  const blur = (src, dst, dx, dy) => fxPass(P_.blur, dst, p => { tex(p, 'T', 0, src.t); gl.uniform2f(gl.getUniformLocation(p, 'dir'), dx/src.w, dy/src.h); });
+  down(FX.emis, FX.q1); blur(FX.q1, FX.q2, 1, 0); blur(FX.q2, FX.q1, 0, 1);       // tight glow
+  down(FX.q1, FX.e1); blur(FX.e1, FX.e2, 1.6, 0); blur(FX.e2, FX.e1, 0, 1.6);     // wide halo
+  fxPass(P_.mix, null, p => { tex(p, 'S', 0, FX.scene.t); tex(p, 'B1', 1, FX.q1.t); tex(p, 'B2', 2, FX.e1.t); gl.uniform1f(gl.getUniformLocation(p, 'k'), 0.9); });
+  gl.activeTexture(gl.TEXTURE0); gl.enable(gl.DEPTH_TEST); gl.bindVertexArray(null);
+}
+let BLOCKY_NOFX = false;
 function upload(name, set, usage){ for (const k of ['b','c','s']){ gl.bindBuffer(gl.ARRAY_BUFFER, BUF[name][k]); gl.bufferData(gl.ARRAY_BUFFER, set[k].a.subarray(0, set[k].n*STRIDE), usage); } }
 function drawSet(name, set){ for (const k of ['b','c','s']){ if (!set[k].n) continue; gl.uniform1i(U.uKind, k === 'b' ? 0 : k === 'c' ? 1 : 2); gl.bindVertexArray(VAO[name][k]); gl.drawArraysInstanced(gl.TRIANGLES, 0, MESH[k].count, set[k].n); } }
 function uploadStatic(){ upload('STATIC', STATIC, gl.STATIC_DRAW); }
@@ -2462,7 +2533,8 @@ function buildZonesStatic(bt){
   for (const d of decals) if (d.type === 'lava'){ cyl(bt, d.x+d.w/2, d.y+d.h/2, 0, d.w, 0.6, d.h, 0, '#a8462a'); cyl(bt, d.x+d.w/2, d.y+d.h/2, 0.6, d.w-12, 0.3, d.h-12, 0, '#ff8a3a', 1); }
   for (const o of obs){
     const cx = o.x+o.w/2, cz = o.y+o.h/2, sr = mulberry(o.seed||7), zf = o.zone ? ZONES[o.zone-1].f1 : '#7fd36e';
-    if (o.type==='wall'){ box(bt,cx,cz,0,o.w,40,o.h,0,o.col); box(bt,cx,cz,40,o.w+2,3,o.h+2,0,shade(o.col,1.15)); }
+    if (o.type==='wall'){ const wc = o.col === '#ffffff' ? '#b9c0c9' : o.col, lc = o.col === '#5fe0ff' ? '#5fe0ff' : o.col === '#ffffff' ? '#ff7a2a' : mix(o.col, '#ffffff', 0.35);
+      box(bt,cx,cz,0,o.w,40,o.h,0,wc); box(bt,cx,cz,40,o.w+2,3,o.h+2,0,shade(wc,0.75)); box(bt,cx,cz,36,o.w+1.2,1.2,o.h+1.2,0,lc,1); }
     else if (o.type==='rail'){ box(bt,cx,cz,0,o.w,9,o.h,0,'#e8eef7'); box(bt,cx,cz,9,o.w,2,o.h,0,o.col,1); }
     else if (o.type==='lamp'){ cyl(bt,cx,cz,0,9,3,9,0,'#5a6070'); cyl(bt,cx,cz,0,3,44,3,0,'#e8eef7'); }
     else if (o.type==='fence'){ box(bt,cx,cz,0,o.w,4,o.h,0,'#e8eef7'); box(bt,cx,cz,12,o.w,3,o.h,0,'#ffcf3a'); const L = Math.max(o.w,o.h), horiz = o.w > o.h;
@@ -2631,13 +2703,13 @@ function rig(bt, x, z, yaw, o){
   const sw = hover ? 0 : Math.sin(ph)*0.62*amp, jet = sh.Legs && K.Legs === 'Jet Wings';
   const bob = hover ? 3 + Math.sin(clock*3)*0.9 : Math.abs(Math.cos(ph))*1.3*amp + (1-amp)*Math.sin(clock*2.2)*0.35;
   const at = (lx,lz) => [x + (lx*c - lz*sn)*s, z + (lx*sn + lz*c)*s];
-  const L0 = (o.lift||0)/s, HIP = 10;
+  const L0 = (o.lift||0)/s; let HIP = 10;
   // the upper body leans into movement (and back from recoil) and sways side to side with each step
   const lean = o.lean || 0, swayZ = Math.sin(ph)*0.55*amp*(o.pilot ? 0.5 : 1);
-  const part = (fn,lx,ly,lz,sx,sy,sz,col,mode,pitch) => {
+  const part = (fn,lx,ly,lz,sx,sy,sz,col,mode,pitch,dyaw) => {
     if (o.ghost){ col = o.ghost; mode = 5; }
     const k = ly > HIP ? ly - HIP : 0, [a,b] = at(lx + lean*k*0.09, lz + swayZ*k*0.05);
-    fn(bt,a,b,(ly+L0)*s,sx*s,sy*s,sz*s,yaw,col,mode,pitch); };
+    fn(bt,a,b,(ly+L0)*s,sx*s,sy*s,sz*s,yaw+(dyaw||0),col,mode,pitch); };
   const ZN = o.zones || {};
   // every zone's parts carry that zone's look: rust, vines, sand fins, ice, chrome neon, flames, void orbs, stars
   const deco = (sl, lx, ly, lz, k) => {
@@ -2652,7 +2724,44 @@ function rig(bt, x, z, yaw, o){
     else { part(cyl,lx,ly+0.4*k,lz,4.6*k,0.4*k,4.6*k,'#ffd23f',1); for (let i=0;i<3;i++){ const an = -ph2 + i*2.09; part(sph,lx+Math.cos(an)*2.6*k,ly+0.9*k,lz+Math.sin(an)*2.6*k,0.9*k,0.9*k,0.9*k,i?'#ffffff':'#ff9df5',1); } }
   };
   if (!o.noShadow) shadow(x, z, 24*s);
-  const ty = 10 + bob;
+  // ----- mechs: long legs with real knees (the lower foot always touches the ground), tall chest, small head -----
+  const mech = !o.pilot, biped = mech && sh.Legs && !hover && K.Legs !== 'Tank Treads' && K.Legs !== 'Spider Legs';
+  const G = o.glow || o.light || '#ff7a2a', dk = o.dark;
+  const plate = sl => A[sl] ? mix(o.body, A[sl], 0.12) : o.body;
+  const LEG1 = 8.2, LEG2 = 8.8, FOOT = 1.7, LEGS = [];
+  if (biped) for (const [lz, pp, phl] of [[-3.9, sw, ph], [3.9, -sw, ph + Math.PI]]){
+    const kb = 0.3 + Math.max(0, Math.cos(phl))*0.75*amp, a1 = pp + kb*0.55, a2 = pp - kb*0.55;
+    LEGS.push({lz, a1, a2, reach: Math.cos(a1)*LEG1 + Math.cos(a2)*LEG2 + FOOT}); }
+  const hipY = biped ? Math.max(...LEGS.map(l => l.reach)) : !mech ? 10 : K.Legs === 'Tank Treads' ? 11 : hover ? 14 : K.Legs === 'Spider Legs' ? 13 : 16;
+  HIP = hipY;
+  const ty = biped ? hipY + (1-amp)*Math.sin(clock*2.2)*0.3 : hipY + (mech ? bob : bob);
+  // a box or cylinder hanging from a joint at angle a: 'start' along the limb, 'off' to the front of it
+  const segAt = (fn, x0, y0, a, start, off, len, w, d, lz, col, md) => {
+    const qx = x0 + Math.sin(a)*start + Math.cos(a)*off, qy = y0 - Math.cos(a)*start + Math.sin(a)*off;
+    part(fn, qx, qy - len, lz, w, len, d, col, md, a); };
+  const mechLeg = L => {
+    const lz = L.lz, pc = plate('Legs'), a1 = L.a1, a2 = L.a2;
+    const kx = Math.sin(a1)*LEG1, ky = hipY - Math.cos(a1)*LEG1, fx = kx + Math.sin(a2)*LEG2, fy = ky - Math.cos(a2)*LEG2;
+    part(sph,0,hipY-2.3,lz,4.6,4.6,4.6,dk);                                  // hip joint
+    segAt(cyl,0,hipY,a1,0,0,LEG1,2.6,2.6,lz,dk);                             // thigh frame
+    segAt(box,0,hipY,a1,0.6,0.5,6.4,5.6,5.4,lz,pc);                          // thigh armour
+    segAt(box,0,hipY,a1,1.6,-0.4,3.8,3.2,6,lz,shade(pc,0.8));                // thigh side plate
+    segAt(box,0,hipY,a1,2.2,3.35,3.2,0.35,0.45,lz,G,1);                      // thigh light
+    part(sph,kx,ky-1.9,lz,3.8,3.8,3.8,dk);                                   // knee joint
+    segAt(box,kx,ky,a2,-1.6,1.9,3.6,2.4,4.8,lz,shade(pc,1.18));              // knee guard
+    segAt(cyl,kx,ky,a2,0,0,LEG2,2.4,2.4,lz,dk);                              // shin frame
+    segAt(box,kx,ky,a2,1.4,0.8,6.2,4.6,5,lz,pc);                             // shin armour
+    segAt(box,kx,ky,a2,1.8,-1.7,4.6,2.6,4.2,lz,shade(pc,0.78));              // calf
+    for (const dz of [-1.2,1.2]) segAt(box,kx,ky,a2,2.6,3.15,2.2,0.35,0.35,lz+dz,G,1);   // shin light slits
+    if (K.Legs === 'Piston Legs') segAt(cyl,kx,ky,a2,0.4,-3,7,1.1,1.1,lz,'#b7c0cf');
+    if (K.Legs === 'Thruster Legs' || jet){ const tx = kx + Math.sin(a2)*6 - 2.8, tyy = ky - Math.cos(a2)*6;
+      part(cyl,tx,tyy-1.5,lz,2.4,3,2.4,'#2a2e36'); part(sph,tx-0.4,tyy-2.4,lz,1.8,1.8,1.8,o.dashing ? '#ffd23f' : '#ff7a2a',1);
+      if (o.dashing) part(sph,tx-1.4,tyy-8,lz,2.4,6,2.4,'#ffb347',1); }
+    part(sph,fx,fy-0.6,lz,2.6,2.6,2.6,dk);                                   // ankle
+    const gy = Math.max(0, fy - FOOT);
+    part(box,fx+1.4,gy,lz,8,1.8,5.4,dk); part(box,fx+4.9,gy+0.2,lz,2.6,1.4,5,pc,0,-0.3); part(box,fx-2.4,gy,lz,2.4,2.2,4.4,pc);
+    if (A.Legs) deco('Legs',kx+2,ky+1,lz,0.7);
+  };
   if (jet && sh.Torso){ // flying mech: swept wings and twin jet engines on the back
     const wc = A.Legs || '#c9d2e3', fl = o.flying ? Math.sin(clock*10)*0.08 : 0;
     for (const sd of [-1,1]){
@@ -2676,6 +2785,8 @@ function rig(bt, x, z, yaw, o){
       part(sph,0,6,0,10,6,10,o.dark);
       for (let k=0;k<4;k++){ const la = (k+0.5)/4*6.283, lift = Math.max(0, Math.sin(ph + k*1.57))*3*amp, kx = Math.cos(la)*9, kz = Math.sin(la)*9;
         part(box,kx*0.55,8.5,kz*0.55,9,1.6,1.6,o.dark); part(box,kx,lift,kz,1.8,9.5,1.8,A.Legs||o.dark); }
+    } else if (biped){
+      for (const L of LEGS) mechLeg(L);
     } else {
       const lw = K.Legs === 'Piston Legs' ? 5.6 : 4.2;
       for (const [lz,pp] of [[-3.2,sw],[3.2,-sw]]){
@@ -2699,58 +2810,86 @@ function rig(bt, x, z, yaw, o){
       part(box,0.5,ty+7.6,0,7.6,2.4,10,shade(o.body,1.15)); part(box,4.3,ty+3.6,0,0.6,2.8,2.8,o.accent,1); part(cyl,0,ty+9.6,0,5.4,1.4,5.4,o.dark);
       part(box,4.3,ty+3.6,-3.4,0.5,4.6,0.8,shade(o.body,0.7)); part(box,4.3,ty+3.6,3.4,0.5,4.6,0.8,shade(o.body,0.7));
     }
-    else { const bd = o.body, dk = o.dark, gl = o.light || '#5fe0ff';
-      part(box,0,ty-1.4,0,6.4,3.2,8.4,dk);                          // waist
-      part(box,-0.4,ty+1.2,0,8.6,6,11.6,bd);                        // lower chest
-      part(box,0.4,ty+6.2,0,10.6,6.6,15.6,bd);                      // wide upper chest
-      part(box,4.9,ty+4.4,0,2.6,6.4,10.8,shade(bd,1.16),0,-0.32);  // sloped front armour
-      part(box,-1,ty+12.4,0,7.2,1.6,9.4,dk);                        // collar
-      part(box,6.4,ty+3.3,0,0.5,0.9,6.4,gl,1);                      // chest light strip
-      for (const sd of [-1,1]){ part(box,0.6,ty+2.6,sd*5.9,5.4,0.7,0.5,gl,1); part(box,0.6,ty+4,sd*5.9,5.4,0.7,0.5,gl,1); }   // side vents
-      if (!jet) for (const sd of [-1,1]){                           // back boosters
-        part(box,-6.6,ty+5.4,sd*3.8,3.6,7.4,3.4,dk); part(box,-8.6,ty+3.4,sd*3.8,1.6,2.6,2.6,'#2a2e36');
+    else { const pc = plate('Torso'), hi = shade(pc,1.14), lo = shade(pc,0.78);
+      part(box,0,ty-2.6,0,5.8,3.4,9.2,dk);                                     // pelvis
+      part(box,2.6,ty-3,0,1.6,3.8,3.8,hi,0,0.18);                              // hip guard
+      for (const sd of [-1,1]) part(box,0.4,ty-3.4,sd*4.9,5.6,3.6,1.1,lo);      // side skirts
+      part(cyl,0,ty+0.6,0,4.8,3,6.4,'#15181d');                                // exposed waist
+      part(cyl,0,ty+1.8,0,5.1,0.35,6.7,G,1);                                   // waist light ring
+      for (const sd of [-1,1]) part(box,2.2,ty+0.8,sd*1.3,0.3,2.6,0.35,G,1);   // circuit lines
+      part(box,0.4,ty+3.6,0,6.6,1.9,8.6,pc); part(box,0.8,ty+5.6,0,7.4,1.9,10,pc);   // abdomen bands
+      part(box,0,ty+7.6,0,9.4,6.4,14.4,pc);                                    // chest
+      for (const sd of [-1,1]) part(box,4.2,ty+8.6,sd*3.5,2.6,5.2,6.8,hi,0,-0.32,-sd*0.24);   // faceted chest plates
+      part(box,5.1,ty+7.8,0,1.4,2.2,3,lo,0,0.3);                               // sternum
+      part(sph,5.7,ty+10.4,0,0.9,1.6,1.6,G,1);                                 // core light
+      for (const sd of [-1,1]) for (let k=0;k<3;k++) part(box,1.6-k*1.7,ty+8.9,sd*7.25,0.45,3,0.3,G,1);   // side vents
+      part(box,-0.8,ty+13.8,0,7.4,1.8,9.2,dk);                                 // collar
+      part(box,-6.2,ty+7.8,0,3.6,7.6,10.4,dk);                                 // backpack
+      if (!jet) for (const sd of [-1,1]){                                      // boosters
+        part(box,-8.2,ty+5.8,sd*3.6,1.8,3,2.8,'#2a2e36');
         const fl = o.dashing ? 1 : 0.25 + amp*0.25;
-        part(sph,-9.6-fl*2,ty+3.6,sd*3.8,(1.4+fl*2.6),(1.2+fl*0.8),(1.2+fl*0.8),o.dashing ? '#ffb347' : gl,1); } }
+        part(sph,-9.4-fl*2.4,ty+6.2,sd*3.6,1.4+fl*2.8,1.2+fl*0.8,1.2+fl*0.8,o.dashing ? '#ffb347' : G,1); } }
     if (A.Torso){
-      const th = K.Torso === 'Hull Plate' ? 2.8 : 1.5;
-      part(box,5.6+th/2,ty+2,0,th,7.4,11.6,A.Torso,0,-0.28); part(box,6.6+th,ty+6.6,0,0.6,1.6,7,shade(A.Torso,1.35),1); part(box,-4.4,ty+1.4,0,3.4,8.6,10.8,shade(A.Torso,0.7));
-      deco('Torso',-5,ty+11,-4.4,0.9); deco('Torso',-5,ty+11,4.4,0.9);
-      part(cyl,-7.8,ty-1.6,-2.6,2.2,2.6,2.2,A.Torso,1); part(cyl,-7.8,ty-1.6,2.6,2.2,2.6,2.2,A.Torso,1);
-      if (K.Torso === 'Drone Bay'){ part(box,-7.4,ty+4,0,3,7,10,shade(A.Torso,0.8)); part(sph,-9,ty+9,0,4,3,4,'#e8eef7'); }
-      if (K.Torso === 'Vampire Frame') for (const b of [-4,0,4]) part(sph,4.8,ty+8,b,1.6,4,1.6,'#ff3b3b',1);
-      if (K.Torso === 'Reactive Plate') for (const [a,b] of [[-3,-3],[3,-3],[-3,3],[3,3],[0,0]]) part(box,5.6,ty+5+a*0.6,b,2.4,1.6,1.6,'#ff6a2a',1);
-      if (K.Torso === 'Hull Plate'){ part(box,0,ty+10.2,-6.8,9,2,2,A.Torso); part(box,0,ty+10.2,6.8,9,2,2,A.Torso); }
-      if (K.Torso === 'Shield Frame'){ part(cyl,-5.6,ty+10,-3,1.2,4,1.2,'#9aa3b2'); part(sph,-5.6,ty+13.5,-3,2.4,2.4,2.4,'#5fe0ff',1); part(cyl,-5.6,ty+10,3,1.2,4,1.2,'#9aa3b2'); part(sph,-5.6,ty+13.5,3,2.4,2.4,2.4,'#5fe0ff',1); }
+      const pc0 = () => plate('Torso');
+      deco('Torso',-5,ty+15,-4.4,0.9); deco('Torso',-5,ty+15,4.4,0.9);
+      if (K.Torso === 'Drone Bay'){ part(box,-8,ty+9,0,2.4,6,8,shade(dk,1.3)); part(sph,-9.4,ty+15,0,4,3,4,'#e8eef7'); }
+      if (K.Torso === 'Vampire Frame') for (const b of [-4,0,4]) part(box,5.4,ty+12.4,b,0.8,3,0.8,'#ff3b3b',1,-0.3);
+      if (K.Torso === 'Reactive Plate') for (const [a,b] of [[-1,-3.5],[1,-3.5],[-1,3.5],[1,3.5]]) part(box,5.8,ty+9.6+a*1.4,b,0.6,1,2.2,'#ff6a2a',1);
+      if (K.Torso === 'Hull Plate') for (const sd of [-1,1]) part(box,0,ty+13.2,sd*6.6,9.6,1.6,2,shade(pc0(),1.1));
+      if (K.Torso === 'Shield Frame') for (const sd of [-1,1]){ part(cyl,-5.6,ty+14,sd*3,1.2,4,1.2,'#9aa3b2'); part(sph,-5.6,ty+17.5,sd*3,2.4,2.4,2.4,'#5fe0ff',1); }
     } else if (o.pack){
       part(box,-5.4,ty+1.2,0,3.8,8,8.6,o.pack); part(box,-5.4,ty+9.2,0,3,1,7,shade(o.pack,0.7));
       part(box,-7.4,ty+3,-2.4,0.4,4.2,1.1,o.visor,1); part(box,-7.4,ty+3,2.4,0.4,4.2,1.1,o.visor,1);
       part(cyl,-6.2,ty+9.6,-2.4,1.8,2.8,1.8,'#9aa3b2'); part(cyl,-6.2,ty+9.6,2.4,1.8,2.8,1.8,'#9aa3b2');
       if (o.dashing) part(sph,-6.4,ty-3,0,3,4,3,'#ffb347',1);
     }
-    if (sh.Core && A.Core){ part(sph,5.0,ty+3.2,0,4,4,4,A.Core,1); part(box,4.6,ty+2.4,0,1,5.6,5.6,'#2a2e36'); if (K.Core === 'Singularity Core'){ const r = clock*4; part(box,5.2+Math.cos(r)*0.3,ty+5,Math.sin(r)*3.4,1.2,1.2,1.2,'#ffffff',1); part(box,5.2,ty+5,-Math.sin(r)*3.4,1.2,1.2,1.2,A.Core,1); } }
-    else if (o.light) part(sph,4.8,ty+4,0,1.8,1.8,1.8,o.light,1);
+    if (sh.Core && A.Core){ if (K.Core === 'Singularity Core'){ const r = clock*4; part(box,6.2,ty+10.4+Math.cos(r)*0.3,Math.sin(r)*3.4,1,1,1,'#ffffff',1); part(box,6.2,ty+10.4,-Math.sin(r)*3.4,1,1,1,A.Core,1); } }
+    else if (o.light && o.pilot) part(sph,4.8,ty+4,0,1.8,1.8,1.8,o.light,1);
   }
   if (sh.Arms){
     const mel = o.gun && MELEE.includes(o.gun.kind);
-    const ra = mel ? (o.swing > 0 ? 2.7 - 2.5*(1-o.swing) : 0.45 + sw*0.3) : o.aimArm ? 1.5 : sw*0.9, la = -sw*0.9, aw = K.Arms === 'Hydraulic Arms' ? 4.6 : 3.5, sy = o.pilot ? ty+7 : ty+8;
-    for (const [lz,pp] of [[-8.4,la],[8.4,ra]]){
+    const ra = mel ? (o.swing > 0 ? 2.7 - 2.5*(1-o.swing) : 0.45 + sw*0.3) : o.aimArm ? 1.5 : sw*0.9, la = -sw*0.9, aw = K.Arms === 'Hydraulic Arms' ? 4.6 : 3.5, sy = o.pilot ? ty+7 : ty+12.6;
+    const gunArm = !mel && o.gun && o.gun.kind !== 'Pilot' && sh.Weapon;
+    const mechArm = (lz, pp, melee, holds) => {
+      const ld = lz > 0 ? 1 : -1, pc = plate('Arms'), hi = shade(pc,1.15), lo = shade(pc,0.8), U1 = 6.4, U2 = 6.6, sy0 = sy - 2.2;
+      const a1 = melee ? pp : holds ? 0.72 + (o.recoil||0)*0.12 : pp*0.9, a2 = melee ? pp : holds ? 1.5 : a1 + 0.38 + Math.max(0, -pp)*0.4;
+      const ex = Math.sin(a1)*U1, ey = sy0 - Math.cos(a1)*U1, hx = ex + Math.sin(a2)*U2, hy = ey - Math.cos(a2)*U2;
+      part(sph,0,sy0-2.6,lz,5.2,5.2,5.2,dk);                                  // shoulder joint
+      part(box,0.3,sy-3.4,lz+ld*1.2,9.8,6.6,7.4,pc);                         // pauldron
+      part(box,0.3,sy+3.2,lz+ld*1,8.6,1.4,6,hi);                             // pauldron top
+      part(box,4.9,sy-0.8,lz+ld*1.2,1.4,5.4,6.6,hi,0,-0.25);                 // pauldron front facet
+      part(box,-0.4,sy-2.6,lz+ld*5.1,8.6,5.6,0.8,lo);                        // pauldron side
+      part(box,5.7,sy+1.4,lz+ld*1.2,0.4,0.7,5.2,G,1); part(box,1.2,sy-0.6,lz+ld*5.6,4.6,0.6,0.3,G,1);
+      segAt(cyl,0,sy0,a1,0,0,U1,2.8,2.8,lz,dk);                              // upper arm
+      segAt(box,0,sy0,a1,1.8,0,4,4.2,4.4,lz,shade(pc,0.9));
+      part(sph,ex,ey-1.7,lz,3.4,3.4,3.4,dk);                                 // elbow
+      segAt(box,ex,ey,a2,0.2,0,6.2,5,5.4,lz,pc);                             // forearm armour
+      segAt(box,ex,ey,a2,0.6,2.4,4.6,0.8,4.4,lz,hi);
+      for (let k=0;k<3;k++) segAt(box,ex,ey,a2,1.6+k*1.4,0,0.35,3,0.3,lz+ld*2.75,K.Arms === 'Rage Arms' ? '#ff3b3b' : G,1);   // grille
+      part(box,hx,hy-1.4,lz,2.8,2.8,3,dk,0,a2);                              // hand
+      if (!melee && !holds) for (const dz of [-1,0,1]){ const fx2 = hx + Math.sin(a2)*1.8, fy2 = hy - Math.cos(a2)*1.8;
+        part(box,fx2,fy2-1.6,lz+dz*0.95,0.7,1.8,0.6,dk,0,a2+0.3); part(sph,fx2+Math.sin(a2+0.3)*1.8,fy2-Math.cos(a2+0.3)*1.8-0.4,lz+dz*0.95,0.6,0.6,0.6,G,1); }
+      if (K.Arms === 'Hydraulic Arms') segAt(cyl,0,sy0,a1,0.5,-1.8,5.5,1,1,lz,'#b7c0cf');
+      if (K.Arms === 'Grip Arms') for (const dz of [-1.3,1.3]) segAt(box,ex,ey,a2,6.2,0,2.6,1.2,1,lz+dz,shade(pc,1.2));
+      if (K.Arms === 'Drone Arms'){ part(cyl,0,sy+4.6,lz,10,0.6,10,'#5a6070'); part(box,0,sy+5.1,lz,11,0.4,1.4,'#c9d2e0',0,0,clock*25); }
+      if (K.Arms === 'Repair Arms'){ part(box,0,sy+4.6,lz+ld,1.4,1,4,'#7ee08a',1); part(box,0,sy+4.6,lz+ld,4,1,1.4,'#7ee08a',1); }
+      if (A.Arms) deco('Arms',0,sy+6,lz+ld,0.9);
+    };
+    for (const [lz0,pp] of [[-8.4,la],[8.4,ra]]){
+      const lz = o.pilot ? lz0 : Math.sign(lz0)*9.8;
+      if (!o.pilot) mechArm(lz, pp, mel && lz > 0, gunArm && lz > 0);
+      else {
       part(sph,0,sy-2.4,lz,5.2,5.2,5.2,shade(o.dark,1.2));
       part(cyl,0,sy-8.5,lz,aw,8.5,aw,o.dark,0,pp);
       const hx = Math.sin(pp)*8.6, hy = sy - Math.cos(pp)*8.6;
       part(sph,hx,hy-2,lz,4,4,4,o.pilot ? o.pack : shade(o.dark,1.3));
       if (K.Arms === 'Grip Arms'){ part(box,hx+1.6,hy-3.4,lz-1.3,3,1.2,1,A.Arms||'#9aa3b2'); part(box,hx+1.6,hy-3.4,lz+1.3,3,1.2,1,A.Arms||'#9aa3b2'); }
       if (K.Arms === 'Hydraulic Arms') part(cyl,0,sy-7.5,lz+(lz>0?2.6:-2.6),1.2,7,1.2,'#b7c0cf',0,pp);
-      if (!o.pilot){ const pc = A.Arms || shade(o.body,1.08), ld = lz > 0 ? 1 : -1;
-        part(box,0.2,sy-1.6,lz+ld*0.8,10.4,5.6,6.6,pc); part(box,0.2,sy+4,lz+ld*1.4,9,1.2,4.6,shade(pc,1.22)); part(box,-0.6,sy-1,lz+ld*4.2,8,4.2,0.8,shade(pc,0.75));
-        part(box,5.4,sy+0.4,lz+ld*0.8,0.5,1,5,o.light || '#5fe0ff',1); }
-      if (A.Arms) deco('Arms',0,sy+5.4,lz+(lz>0?1:-1),0.9);
-      if (K.Arms === 'Drone Arms') { part(cyl,0,sy+2,lz,10,0.6,10,'#5a6070'); part(box,0,sy+2.5,lz,11,0.4,1.4,'#c9d2e0',0,Math.sin(clock*25)); };
-      if (K.Arms === 'Rage Arms') part(box,0,sy-6,lz,4,1.2,4,'#ff3b3b',1);
-      if (K.Arms === 'Repair Arms'){ part(box,0,sy+0.2,lz,1.2,3.6,3.6,'#7ee08a',1); part(box,0,sy+0.2,lz,1.4,1.2,3.8,'#7ee08a',1); }
+      }
       if (mel && lz > 0){
         const L = o.gun.kind === 'Blade' ? 20 : 16, gc = o.gun.col, k = o.gun.kind;
-        const tip = r => [Math.sin(pp)*r, sy - Math.cos(pp)*r]; // point along the arm, r below the shoulder
-        const [hx,hy] = tip(9.6);                         // the hand
+        const tip = r => [Math.sin(pp)*r, (o.pilot ? sy : sy - 2.2) - Math.cos(pp)*r]; // point along the arm, r below the shoulder
+        const [hx,hy] = tip(o.pilot ? 9.6 : 13);          // the hand
         const from = (ang, r) => [hx + Math.sin(ang)*r, hy - Math.cos(ang)*r];
         const rod = (fn, ang, r0, len, w, d, cl, md) => { const [a2,b2] = from(ang, r0); part(fn, a2, b2-len, lz, w, len, d, cl, md, ang); };
         if (k === 'Blade'){ // held out in front, swings with the arm
@@ -2808,44 +2947,39 @@ function rig(bt, x, z, yaw, o){
       part(cyl,0,ty+11.4,-4.9,3,3.2,1.6,o.dark); part(cyl,0,ty+11.4,4.9,3,3.2,1.6,o.dark);
       part(sph,0,ty+12.4,-5.6,1.4,1.4,1.4,o.accent,1); part(sph,0,ty+12.4,5.6,1.4,1.4,1.4,o.accent,1);
     } else {
-      const hc = o.head;
-      part(box,0,ty+11,0,4.4,1.6,4.4,o.dark);                               // neck
-      part(box,-0.4,ty+12.4,0,7.8,4.2,7.2,hc);                              // head block
-      part(box,2.8,ty+12.8,0,4,3.4,6.4,shade(hc,1.14),0,-0.34);            // sloped face
-      part(box,-1.4,ty+16.4,0,6,1,5.4,shade(hc,0.8));                       // brow
-      for (const sd of [-1,1]) part(box,-2.8,ty+14.4,sd*3.9,5.2,1.1,0.6,shade(hc,0.7),0,0.28);   // fins
-      const hk = K.Head;
-      if (hk === 'Visor Unit' || hk === 'Crown Visor') part(box,4.8,ty+14,0,0.7,1.6,6.6,o.visor,1);
-      else if (hk === 'Optic Helm') part(sph,4.4,ty+13.4,0,2.8,2.8,2.8,o.visor,1);
-      else part(box,4.8,ty+14.2,0,0.6,0.9,5.4,o.visor,1);
-      if (A.Head){
-        if (hk === 'Sensor Dome'){ part(sph,0,ty+17,0,7,6,7,A.Head,1); part(box,0,ty+17.6,0,9.6,1.4,9.6,shade(A.Head,0.7)); }
-        else if (hk === 'Crown Visor'){ part(cyl,0,ty+18,0,9.6,2,9.6,'#ffd23f'); for (const [a,b] of [[-3.6,-3.6],[3.6,-3.6],[-3.6,3.6],[3.6,3.6],[0,0]]) part(box,a,ty+20.4,b,1.6,a===0?4:2.6,1.6,'#ffd23f',1); }
-        else {   // angular armoured helmet: cap, sloped brow, cheek plates
-          part(box,-0.8,ty+15.2,0,8.6,2.6,8,A.Head); part(box,2.6,ty+15.4,0,3.2,1.8,7.4,shade(A.Head,1.22),0,-0.34);
-          for (const sd of [-1,1]) part(box,0.6,ty+12.4,sd*4,6,3.4,0.8,shade(A.Head,0.72));
-          if (hk === 'Lucky Helm') part(box,-1,ty+18.4,0,1.2,2.2,1.2,'#5fd35f',1);
-          if (hk === 'Battle Helm') for (const sd of [-1,1]) part(box,-1.6,ty+17.6,sd*3.6,1.6,5,1.2,'#e8eef7',0,0.55);
-        }
-      }
+      const hc = A.Head ? mix(o.head, A.Head, 0.16) : o.head, hk = K.Head, hb = ty + 15.4;
+      part(cyl,0,ty+14.4,0,3.4,1.6,3.4,dk);                                   // neck
+      part(sph,-0.6,hb,0,7.4,6.8,6.8,hc);                                     // helmet shell
+      part(box,-1.2,hb+4.6,0,5.6,2.2,5.8,shade(hc,1.12),0,0.12);             // crown plate
+      part(box,2.4,hb+0.6,0,3.6,3.8,5.6,shade(hc,0.85),0,-0.32);             // faceplate
+      part(box,3.2,hb-0.2,0,2.2,1.6,4,dk,0,0.4);                              // jaw
+      for (const sd of [-1,1]){ part(box,-0.4,hb+1.6,sd*3.4,4.4,2.6,0.9,shade(hc,0.72)); part(box,0.8,hb+2.6,sd*3.9,2.2,0.4,0.3,G,1); }   // cheek vents
+      if (hk === 'Optic Helm'){ part(box,3.9,hb+1.4,0.9,1.6,2.4,2.4,dk); part(sph,4.5,hb+1.6,0.9,2,2,2,o.visor,1); }   // mono-eye
+      else if (hk === 'Visor Unit' || hk === 'Crown Visor') part(box,4.5,hb+2.4,0,0.5,1.1,5.4,o.visor,1);
+      else { part(box,4.5,hb+2.7,0,0.5,0.7,4.4,o.visor,1); part(sph,4.4,hb+1.6,1.4,1.2,1.2,1.2,o.visor,1); }
+      if (hk === 'Sensor Dome') part(sph,-0.8,hb+5.6,0,4.6,3.2,4.6,A.Head || G,1);
+      if (hk === 'Crown Visor') for (const [a2,b2] of [[-2.4,-2.2],[-2.4,2.2],[-0.6,0]]) part(box,a2,hb+6.6,b2,1.2,a2 === -0.6 ? 3.6 : 2.4,1.2,'#ffd23f',1);
+      if (hk === 'Battle Helm') for (const sd of [-1,1]) part(box,-1.8,hb+5.4,sd*2.6,1.4,4.6,1,shade(hc,1.25),0,0.6);
+      if (hk === 'Lucky Helm') part(box,-1.2,hb+6.8,0,1,2,1,'#5fd35f',1);
     }
-    if (!o.pilot && A.Head) deco('Head',-0.6,ty+21.2,0,1);
-    if (o.antenna){ part(cyl,-1,ty+(o.pilot?17:18),2.6,0.9,6,0.9,'#2a2e36'); part(sph,-1,ty+(o.pilot?22.5:23.5),2.6,2.2,2.2,2.2,'#ff4a4a',1); }
+    if (!o.pilot && A.Head) deco('Head',-0.6,ty+24.6,0,1);
+    if (o.antenna){ const ab = o.pilot ? ty+17 : ty+20.6; part(cyl,-1.6,ab,2.4,0.7,o.pilot ? 6 : 5,0.7,'#2a2e36'); part(sph,-1.6,ab+(o.pilot ? 5.5 : 4.6),2.4,o.pilot ? 2.2 : 1.2,o.pilot ? 2.2 : 1.2,o.pilot ? 2.2 : 1.2,o.pilot ? '#ff4a4a' : G,1); }
   }
-  if (o.spikes){ part(cyl,0,ty+9.5,-9,4.4,5,4.4,'#2a2e36'); part(cyl,0,ty+9.5,9,4.4,5,4.4,'#2a2e36'); part(sph,0,ty+14,-9,2.4,4,2.4,'#ff3b3b',1); part(sph,0,ty+14,9,2.4,4,2.4,'#ff3b3b',1); }
-  if (o.stripes){ part(box,4.7,ty+3,0,0.6,1.5,12,'#111'); part(box,4.7,ty+6,0,0.6,1.5,12,'#111'); }
+  if (o.spikes) for (const sd of [-1,1]){ part(box,0,ty+16,sd*11,2.4,6,2.4,'#2a2e36',0,0.3); part(box,-0.6,ty+21.6,sd*11,1.2,3.4,1.2,'#ff3b3b',1,0.3); }
+  if (o.stripes) for (const yy of [8.6, 11.4]) part(box,4.9,ty+yy,0,0.6,1.2,12.4,'#111');
   const g = o.gun;
   if (g && sh.Weapon){
     if (g.kind === 'Pilot'){
       if (o.aimArm){ const [a,b] = at(8.6,8.4); gunModel(bt, a, b, (ty+7)*s, yaw, 'Pilot', g.col, s, 1); }
       else part(cyl,0,ty-2,10.8,2.2,7,2.2,'#2a2e36');
     } else {
-      const gk = ty + 5 - HIP, ca = g.aim === undefined ? yaw : g.aim, [ax,az] = at(1 + lean*gk*0.09 - (o.recoil||0)*3.2, 10.9 + swayZ*gk*0.05);
-      if (!MELEE.includes(g.kind)) gunModel(bt, ax, az, (ty+5+L0)*s, ca, g.kind || 'Blaster', g.col, s, g.tier||1, g.flash);
+      const gy = o.pilot ? ty + 5 : ty + 6.4, gk = gy - HIP, ca = g.aim === undefined ? yaw : g.aim;
+      const [ax,az] = at((o.pilot ? 1 : 4.5) + lean*gk*0.09 - (o.recoil||0)*3.2, (o.pilot ? 10.9 : 9.8) + swayZ*gk*0.05);
+      if (!MELEE.includes(g.kind)) gunModel(bt, ax, az, (gy+L0)*s, ca, g.kind || 'Blaster', g.col, s, g.tier||1, g.flash);
     }
   }
   if (o.shield) sph(ALPHA, x, z, -2*s, 40*s, 44*s, 40*s, 0, '#5fe0ff', 5);
-  if (o.hit && !o.ghost) sph(ALPHA, x, z, 0, (o.pilot ? 15 : 26)*s, (o.pilot ? 26 : 36)*s, (o.pilot ? 15 : 26)*s, 0, '#ffffff', 5);
+  if (o.hit && !o.ghost) sph(ALPHA, x, z, 0, (o.pilot ? 15 : 28)*s, (o.pilot ? 26 : 46)*s, (o.pilot ? 15 : 28)*s, 0, '#ffffff', 5);
 }
 function partModel(bt, x, z, base, p, yaw, k){
   const slot = p.slot, col = TIERS[p.tier].c, kind = kindOf(p), c = Math.cos(yaw), sn = Math.sin(yaw);
@@ -2908,7 +3042,7 @@ function drawPlayerDyn(bt){
     else rig(ALPHA, g.x, g.y, g.face, {s:PILOT_S, pilot:true, body:'#000', dark:'#000', head:'#000', pack:'#000', visor:'#000', accent:'#000', ghost:gc, noShadow:true, walk:g.walk, amp:g.amp, lean:1.5}); }
   if (P.inMech){
     const SM = skin().m;
-    rig(bt, P.x, P.y, P.face, {s:mS(), body:SM[0], dark:SM[1], head:SM[2], visor: L.A.Head || '#5fe0ff', light:'#5fe0ff',
+    rig(bt, P.x, P.y, P.face, {s:mS(), body:SM[0], dark:SM[1], head:SM[2], visor: '#ff8a3a', light:'#ff7a2a',
       armor:L.A, kinds:L.K, zones:L.Zn, antenna:true, gun:{kind:L.K.Weapon, tier:L.wt, aim:P.aim, col:L.A.Weapon||'#5fe0ff', flash: clock < (P.flashT||0)},
       walk:P.fly ? 0 : P.walk, amp:P.fly ? 0 : P.amp, lift:P.lift||0, flying:P.fly, hit, dashing: P.dashT > 0 || P.fly, swing: P.swingT > 0 ? P.swingT/P.swingMax : 0, shield: (P.shieldHitT > 0 || P.odT > 0) && P.shield > 0,
       lean:leanP, recoil:P.recoilK||0});
@@ -2942,9 +3076,9 @@ function drawEnemyBody(bt, e){
   if (boss){ cyl(ALPHA, e.x, e.y, 0.3, 60*e.sc, 1, 60*e.sc, 0, e.warn > 0 ? '#ff3b3b' : ZONES[zone-1].acc, 5); }
   if (e.elite || e.mini){ const pul = 1 + Math.sin(clock*5)*0.08; cyl(ALPHA, e.x, e.y, 0.4, e.r*2.8*pul, 1, e.r*2.8*pul, 0, e.mini ? '#ff9a2e' : '#ffd23f', 5); sph(bt, e.x, e.y, (e.mini ? 46 : 38)*e.sc, 5*e.sc, 5*e.sc, 5*e.sc, clock*3, e.mini ? '#ff9a2e' : '#ffd23f', 1); }
   if (zone >= 2 && CREATURE[zone]){ drawCreature(bt, e, zone, boss); return; }
-  const body = boss ? mix('#2a2d36', ZONES[zone-1].acc, e.hp < e.max/2 ? 0.45 : 0.25) : e.kind==='chaser' ? '#5a2048' : e.kind==='wave' ? '#7a6628' : mix('#7a5a40','#55596a',0.5);
+  const body = boss ? mix('#2a2d36', ZONES[zone-1].acc, e.hp < e.max/2 ? 0.35 : 0.18) : e.kind==='chaser' ? '#4a2340' : e.kind==='wave' ? '#5c5236' : '#4a4f57';
   const eye = boss ? '#ff3b3b' : e.kind==='chaser' ? '#ff4fd0' : e.kind==='wave' ? '#ffd23f' : '#ffb347';
-  rig(bt, e.x, e.y, e.ang, {s:e.sc, body, dark:'#262a31', head:shade(body,1.15), visor:eye, light:eye, kinds:{Head:'Optic Helm'},
+  rig(bt, e.x, e.y, e.ang, {s:e.sc, body, dark:'#1c1f24', head:shade(body,1.12), visor:eye, light:eye, kinds:{Head:'Optic Helm'},
     gun:{kind:ENEMY_GUN[e.kind], aim:e.ang, col:eye, tier:1}, walk:e.walk, amp:e.amp||0, lean:(e.amp||0)*0.45, spikes:boss, stripes:e.kind==='wave', hit:e.hitT > 0, antenna:boss, armor: boss ? {Arms:ZONES[zone-1].acc, Torso:ZONES[zone-1].acc, Legs:shade(ZONES[zone-1].acc,0.7)} : undefined});
 }
 function drawCreature(bt, e, zone, boss){
@@ -3088,8 +3222,9 @@ function drawCrateDyn(bt, c){
   if (c.supply) for (const [dx,dz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) cyl(bt, c.x+dx*sz*0.55, c.y+dz*sz*0.45, 0, 3.4, sz+6, 3.4, 0, '#ffcf3a', 1);
 }
 function ringDyn(bt, p){
+  if (p.dull){ const r = p.ring*(1-p.life/p.max)+4; cyl(ALPHA, p.x, p.y, 0.4, r*2, 0.8, r*2, 0, p.col, 5); return; }
   const r = p.ring*(1-p.life/p.max)+4, n = 28;
-  for (let k=0;k<n;k++){ const a = k/n*6.283; sph(bt, p.x+Math.cos(a)*r, p.y+Math.sin(a)*r, 1, 4, 4, 4, 0, p.col, 1); }
+  for (let k=0;k<n;k++){ const a = k/n*6.283; sph(bt, p.x+Math.cos(a)*r, p.y+Math.sin(a)*r, 1, 4, 4, 4, 0, p.col, p.dull ? 0 : 1); }
 }
 function buildDynamic(){
   const bt = DYN; bt.reset(); ALPHA.reset();
@@ -3220,7 +3355,7 @@ function buildDynamic(){
       px0 = nx; pz0 = nz;
     }
   }
-  for (const p of parts){ if (p.ring) ringDyn(bt, p); else sph(bt, p.x, p.y, p.h||2, p.s*1.8, p.s*1.8, p.s*1.8, 0, p.col, 1); }
+  for (const p of parts){ if (p.ring) ringDyn(bt, p); else if (p.dull){ const k = 2 + (1 - p.life/p.max)*5; sph(ALPHA, p.x, p.y, (p.h||2)*0.4, p.s*k, p.s*k*0.7, p.s*k, 0, p.col, 5); } else sph(bt, p.x, p.y, p.h||2, p.s*1.8, p.s*1.8, p.s*1.8, 0, p.col, 1); }
 }
 
 /* ---------- frame ---------- */
@@ -3240,14 +3375,14 @@ function render3D(){
   if (dusk){ horizon = mixA(horizon, [0.98,0.6,0.38], 0.45*dusk); zenith = mixA(zenith, [0.35,0.3,0.55], 0.4*dusk); }
   const fx = Math.cos(camYaw), fz = Math.sin(camYaw), cp = Math.cos(camPitch), sp = Math.sin(camPitch);
   camZoom += ((P.inMech ? 1 : 0) - camZoom) * 0.08;
-  const D = (62 + camZoom*62)*camDistK, CH = 13 + camZoom*22, SIDE = 10 + camZoom*12, shk = shake*Math.sin(clock*60);
+  const D = (62 + camZoom*74)*camDistK, CH = 13 + camZoom*30, SIDE = 10 + camZoom*12, shk = shake*Math.sin(clock*60);
   const ox = -fz*SIDE, oz = fx*SIDE;
   // pull the camera in when something tall is between it and you, so it never ends up inside a tree or wall
   let Dc = D;
   for (let k=1;k<=12;k++){ const t = k/12*D, qx = P.x - fx*cp*t + ox*k/12, qz = P.y - fz*cp*t + oz*k/12;
     if (CH + sp*t > 120) break;
     let hit = false; for (const o of obsNear(qx-2,qz-2,qx+2,qz+2)){ if (!CAM_BLOCK.has(o.type)) continue; if (qx>o.x-4 && qx<o.x+o.w+4 && qz>o.y-4 && qz<o.y+o.h+4){ hit = true; break; } }
-    if (hit){ Dc = Math.max(18, (k-1)/12*D); break; } }
+    if (hit){ Dc = Math.max(P.inMech ? 62*mS()/1.45 : 18, (k-1)/12*D); break; } }
   camDistS = Dc < camDistS || !camDistS ? Dc : camDistS + (Dc - camDistS)*0.06;
   const Dd = camDistS, sideK = Dd/D;
   EYE = [P.x - fx*cp*Dd + ox*sideK, Math.max(4, CH + sp*Dd) + shk + (P.inMech ? P.lift||0 : 0), P.y - fz*cp*Dd + oz*sideK];
@@ -3258,8 +3393,9 @@ function render3D(){
   const cw = Math.max(320, Math.min(2200, Math.round(cv.clientWidth * dpr))), ch = Math.round(cw*9/16);
   if (cv.width !== cw || cv.height !== ch){ cv.width = cw; cv.height = ch; }
   buildDynamic();
-  gl.viewport(0,0,cv.width,cv.height);
-  gl.clearColor(horizon[0], horizon[1], horizon[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  const fxOn = fxBegin(horizon);
+  if (!fxOn){ gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0,0,cv.width,cv.height);
+    gl.clearColor(horizon[0], horizon[1], horizon[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); }
   gl.useProgram(prog);
   gl.uniformMatrix4fv(U.uVP, false, new Float32Array(VP)); gl.uniform1f(U.uTime, clock);
   const sd = [0.45, 0.62, 0.35], sl = Math.hypot(...sd);
@@ -3294,6 +3430,7 @@ function render3D(){
   drawSet('ALPHA', ALPHA);
   gl.depthMask(true); gl.disable(gl.BLEND);
   gl.bindVertexArray(null);
+  if (fxOn) fxEnd();
 }
 
 /* ================= HUD (2D overlay) ================= */
