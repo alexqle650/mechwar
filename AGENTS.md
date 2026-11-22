@@ -35,3 +35,10 @@ These are backstops. They catch common key formats, not everything, so rule 4 st
 - Keep the game a single self-contained `index.html` unless the user asks otherwise.
 - Saves use `localStorage` key `mechwars-v2`. Don't change the save format without telling the user, since it can wipe or break existing progress.
 - Run `node --check` on the extracted `<script>` contents after edits to catch syntax errors.
+
+## Multiplayer
+
+- Online play uses PeerJS (loaded on demand from unpkg, with jsDelivr as a fallback) and the free PeerJS cloud signaling server. It needs no keys; keep it that way.
+- Never add a TURN server username/password or any other credential to `index.html`. If a relay is needed, it must hand out short-lived credentials from a server.
+- Everything received from the other player is untrusted: run it through the `clean*` functions, and show it with canvas text or `textContent`, never `innerHTML`.
+- The friend's base is drawn `DX` to the side (host: east, guest: west). Positions inside the base area (`y > -24`) are shifted by `NET.side*DX` when received; zone positions are used as they are.

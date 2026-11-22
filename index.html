@@ -121,6 +121,7 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
       <button class="btn" id="styleBtn">Style: Mixed</button>
       <button class="btn" id="sensBtn">Camera: Normal</button>
       <button class="btn" id="muteBtn">Sound: On (M)</button>
+      <button class="btn" id="netBtn">Multiplayer (P)</button>
       <button class="btn" id="codesBtn">Codes &amp; Save</button>
       <button class="btn" id="newBtn">New game</button>
     </div>
@@ -244,6 +245,26 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
         <textarea id="saveCode" rows="4" style="width:100%;font-size:.7rem;background:#0b0e15;color:#c9d2e3;border:2px solid var(--line);word-break:break-all"></textarea>
         <div class="btns"><button class="btn" id="saveCopy">Copy my save</button><button class="btn primary" id="saveLoad">Load pasted save</button></div>
         <p class="body" id="saveMsg" style="margin:4px 0 0;font-size:.85rem"></p>
+      </div>
+    </div>
+
+    <div class="ov" id="ovNet" hidden>
+      <div class="panel wide px" style="--edge:var(--moss)">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <h2>Multiplayer</h2>
+          <button class="btn" id="netClose">Close (P)</button>
+        </div>
+        <p class="body" style="margin:0 0 8px;font-size:.9rem">Play online with one friend. You each keep your own save. You'll see each other move, and you can visit each other's base through the gate in the side wall.</p>
+        <p class="label">Your name</p>
+        <input id="netName" maxlength="16" style="font-family:var(--f-label);font-size:1rem;padding:8px;background:#0b0e15;color:#fff;border:2px solid var(--line);text-transform:uppercase">
+        <p class="label" style="margin-top:12px">Host a game</p>
+        <div class="btns"><button class="btn primary" id="netHostBtn">Host and get a code</button></div>
+        <p class="label" style="margin-top:12px">Join a friend's game</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><input id="netCode" maxlength="6" placeholder="ROOM CODE" autocomplete="off" style="font-family:var(--f-label);font-size:1rem;padding:8px;background:#0b0e15;color:#fff;border:2px solid var(--line);text-transform:uppercase"><button class="btn" id="netJoinBtn">Join</button></div>
+        <p id="netCodeShow" style="font-family:var(--f-label);font-size:2rem;letter-spacing:.2em;color:var(--hazard);margin:12px 0 0"></p>
+        <p class="body" id="netStatus" style="margin:6px 0 0;font-size:.9rem">Not connected.</p>
+        <div class="btns"><button class="btn" id="netCopy" hidden>Copy code</button><button class="btn" id="netLeave" hidden>Leave</button></div>
+        <p class="body" style="margin:10px 0 0;font-size:.78rem;opacity:.8">Connects through the free PeerJS service, then directly between your two browsers. Your friend can see your IP address, so only play with people you know. School or work Wi-Fi sometimes blocks it.</p>
       </div>
     </div>
 
@@ -429,6 +450,8 @@ const REPAIR = {x:300, y:1380};
 const TREADS = [{x:430, y:1180, rate:1, need:0, n:'Basic'}, {x:560, y:1180, rate:3, need:10, n:'Pro'}, {x:690, y:1180, rate:8, need:30, n:'Turbo'}];
 const FOUNTAIN = {x:0, y:820};
 const HANGAR = {x:-470, y:950};
+// multiplayer: a friend's base sits DX to the side (host sees it east, guest sees it west), joined by a gate in the side wall
+const DX = 1800, DOOR_Y0 = 540, DOOR_Y1 = 760;
 
 /* ================= helpers ================= */
 const R = Math.random;
@@ -524,11 +547,45 @@ function obsNear(x0,y0,x1,y1){
   return out;
 }
 const wall = (x,y,w,h,col) => addObs({x,y,w,h,type:'wall',col:col||'#e8eef7'});
+function removeObs(o){
+  const i = obs.indexOf(o); if (i >= 0) obs.splice(i, 1);
+  for (const c of grid.values()){ const j = c.indexOf(o); if (j >= 0) c.splice(j, 1); }
+}
+const BASE_RANGE = {o0:0, o1:0, s0:0, s1:0}, BASE_GATES = {}, FRIEND_SIDES = [];
+// copy the base's walls, trees, lamps and signs to the side, open the gates between, and close the copy's own bridge
+function buildFriendBase(side){
+  const ox = side*DX;
+  for (const o of obs.slice(BASE_RANGE.o0, BASE_RANGE.o1)){
+    if (o.door === -side) continue;                 // the copy's gate that faces our base stays open
+    const c = addObs(Object.assign({}, o, {x:o.x+ox, friend:side}));
+    if (o.door) c.door = undefined;
+    if (lamps.includes(o)) lamps.push(c);
+  }
+  removeObs(BASE_GATES[side]);
+  const cx0 = side > 0 ? HUB.x+HUB.w+24 : -(DX-HUB.w/2-24), cw = DX-HUB.w-48;
+  wall(cx0, DOOR_Y0-24, cw, 24, '#ffffff'); wall(cx0, DOOR_Y1, cw, 24, '#ffffff');
+  wall(ox-LANE, -24, LANE*2, 24, '#ff5cf0');
+  for (const s of signs.slice(BASE_RANGE.s0, BASE_RANGE.s1)) signs.push({x:s.x+ox, y:s.y, text:s.text, col:s.col, size:s.size, friend:side});
+  signs.push({x:ox, y:200, text:"FRIEND'S BASE", col:'#7ee08a', size:16, sub2:'THEIR SHOP AND CRATES ARE THEIRS: LOOK, DON\'T TOUCH', friendTitle:side});
+  signs.push({x:ox, y:60, text:"FRIEND'S BRIDGE: USE YOUR OWN", col:'#ff5cf0', size:8, friend:side});
+  signs.push({x:side*DX/2, y:DOOR_Y0+40, text:'GATE', col:'#5fe0ff', size:8, sub2: side > 0 ? 'EAST: FRIEND / WEST: HOME' : 'WEST: FRIEND / EAST: HOME'});
+}
+function ensureFriendBase(side){
+  if (!side || FRIEND_SIDES.includes(side)) return;
+  FRIEND_SIDES.push(side); buildFriendBase(side);
+  if (glOk){ STATIC.reset(); buildStatic(); uploadStatic(); }
+}
 const WORKSHOP_HALF = 270;
 function buildWorld(){
   // ---------- big colourful base ----------
   const H0 = HUB.x, H1 = HUB.x + HUB.w, HB = HUB.y + HUB.h;
-  wall(H0-24,0,24,HUB.h,'#ffffff'); wall(H1,0,24,HUB.h,'#ffffff'); wall(H0-24,HB,HUB.w+48,24,'#ffffff');
+  BASE_RANGE.o0 = obs.length; BASE_RANGE.s0 = signs.length;
+  // side walls have a gate in them; a gate opens when a friend's base is built on that side
+  wall(H0-24,0,24,DOOR_Y0,'#ffffff'); wall(H0-24,DOOR_Y1,24,HUB.h-DOOR_Y1,'#ffffff');
+  wall(H1,0,24,DOOR_Y0,'#ffffff'); wall(H1,DOOR_Y1,24,HUB.h-DOOR_Y1,'#ffffff');
+  BASE_GATES[-1] = wall(H0-24,DOOR_Y0,24,DOOR_Y1-DOOR_Y0,'#5fe0ff'); BASE_GATES[-1].door = -1;
+  BASE_GATES[1] = wall(H1,DOOR_Y0,24,DOOR_Y1-DOOR_Y0,'#5fe0ff'); BASE_GATES[1].door = 1;
+  wall(H0-24,HB,HUB.w+48,24,'#ffffff');
   wall(H0-24,-24,-H0+24-LANE,24,'#ffffff'); wall(LANE,-24,H1+24-LANE,24,'#ffffff');
   addObs({x:FOUNTAIN.x-70, y:FOUNTAIN.y-70, w:140, h:140, type:'fountain'});
   // workshop yard fence (open toward the plaza)
@@ -548,6 +605,7 @@ function buildWorld(){
   signs.push({x:560,y:1110,text:'SPEED GYM',col:'#ff9a2e',size:16, sub2:'WALK ON A TREADMILL TO TRAIN SPEED'});
   signs.push({x:0,y:1130,text:'UPGRADES: PRESS U',col:'#ff5cf0',size:8});
   for (const [x,y] of [[-600,180],[600,180],[-600,1300],[600,1300],[-300,620],[300,620],[0,1250],[-250,1150],[250,1150]]) lamps.push(addObs({x:x-4,y:y-4,w:8,h:8,type:'lamp',col:'#ffe08a'}));
+  BASE_RANGE.o1 = obs.length; BASE_RANGE.s1 = signs.length;
   // ---------- zones ----------
   for (let i=1;i<=NZ;i++){
     const zn = ZONES[i-1], bot = zBottom(i), top = zTop(i), wc = zn.wall;
@@ -1321,6 +1379,7 @@ addEventListener('keydown', e => {
   if (e.code==='KeyK') toggleSkins();
   if (e.code==='KeyU') toggleUp();
   if (e.code==='KeyM') toggleMute();
+  if (e.code==='KeyP') toggleNet();
   if (e.code==='KeyF') choose(true);
   if (e.code==='KeyG') choose(false);
   if (e.code==='KeyH') choose('yard');
@@ -1407,7 +1466,7 @@ $('tSkill').addEventListener('click', () => ability());
 $('tBay').addEventListener('click', () => toggleBay());
 
 /* ================= overlays ================= */
-const OVS = ['ovStart','ovChoice','ovBay','ovDead','ovNew','ovIndex','ovSkins','ovUp','ovCodes','ovGame'];
+const OVS = ['ovStart','ovChoice','ovBay','ovDead','ovNew','ovIndex','ovSkins','ovUp','ovCodes','ovGame','ovNet'];
 const UPGRADES = [
   {id:'cspd',  n:'Conveyor speed',     max:10, cost:l => Math.round(200*Math.pow(1.8,l)), d:l => 'A new part every '+(3.2*Math.pow(0.88,l)).toFixed(1)+'s'},
   {id:'cluck', n:'Conveyor luck',      max:10, cost:l => Math.round(300*Math.pow(2,l)),   d:l => 'Rarer parts on the belt (luck '+l+')'},
@@ -2217,10 +2276,11 @@ const STATIC = new BSet(8192), DYN = new BSet(4096), ALPHA = new BSet(512), SKY 
 const rgbCache = new Map();
 function rgb(c){ if (Array.isArray(c)) return c; if (typeof c !== 'string') return [0.6,0.6,0.65]; let v = rgbCache.get(c); if (!v){ const n = parseInt(c.slice(1),16); v = [(n>>16)/255, (n>>8&255)/255, (n&255)/255]; rgbCache.set(c,v); } return v; }
 // x,z = centre on the ground plane (game x,y), base = bottom height, sx forward, sy height, sz side
-function box(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch){ const c = rgb(col); bt.b.push(x, base, z, sx, sy, sz, yaw||0, c[0], c[1], c[2], mode||0, pitch||0); }
+let GOX = 0;   // x offset applied while drawing a copy of the base
+function box(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch){ const c = rgb(col); bt.b.push(x+GOX, base, z, sx, sy, sz, yaw||0, c[0], c[1], c[2], mode||0, pitch||0); }
 let BLOCKY = false;
-function cyl(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch){ const c = rgb(col); if (BLOCKY && mode !== 3 && mode !== 4) return box(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch); bt.c.push(x, base, z, sx, sy, sz, yaw||0, c[0], c[1], c[2], mode||0, pitch||0); }
-function sph(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch){ const c = rgb(col); if (BLOCKY && mode !== 4 && mode !== 5) return box(bt, x, z, base, sx*0.85, sy*0.85, sz*0.85, yaw, col, mode, pitch); bt.s.push(x, base, z, sx, sy, sz, yaw||0, c[0], c[1], c[2], mode||0, pitch||0); }
+function cyl(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch){ const c = rgb(col); if (BLOCKY && mode !== 3 && mode !== 4) return box(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch); bt.c.push(x+GOX, base, z, sx, sy, sz, yaw||0, c[0], c[1], c[2], mode||0, pitch||0); }
+function sph(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch){ const c = rgb(col); if (BLOCKY && mode !== 4 && mode !== 5) return box(bt, x, z, base, sx*0.85, sy*0.85, sz*0.85, yaw, col, mode, pitch); bt.s.push(x+GOX, base, z, sx, sy, sz, yaw||0, c[0], c[1], c[2], mode||0, pitch||0); }
 // horizontal barrel starting at (x,z) at height h, pointing along yaw
 function barrel(bt, x, z, h, yaw, L, r, col, mode){ cyl(bt, x, z, h - L, r*2, L, r*2, yaw, col, mode, Math.PI/2); }
 function shadow(x, z, r){ cyl(ALPHA, x, z, 0.12, r, 0.1, r, 0, '#000000', 3); }
@@ -2287,7 +2347,17 @@ function applyStyle(){
 
 /* ---------- static world geometry ---------- */
 function buildStatic(){
-  const bt = STATIC, BY = (BELT_Y0+BELT_Y1)/2;
+  const bt = STATIC;
+  drawBaseStatic(bt);
+  for (const sd of FRIEND_SIDES){
+    GOX = sd*DX; drawBaseStatic(bt); GOX = 0;
+    box(bt, sd*DX/2, (DOOR_Y0+DOOR_Y1)/2, -4, DX-HUB.w, 4, DOOR_Y1-DOOR_Y0, 0, '#f1e3c4', 2);
+    for (let k=0;k<4;k++) box(bt, sd*(HUB.w/2+30+k*36), (DOOR_Y0+DOOR_Y1)/2, 0.2, 14, 0.4, DOOR_Y1-DOOR_Y0-40, 0, '#5fe0ff', 1);
+  }
+  buildZonesStatic(bt);
+}
+function drawBaseStatic(bt){
+  const BY = (BELT_Y0+BELT_Y1)/2;
   // ---------- colourful base ----------
   box(bt, 0, HUB.y+HUB.h/2, -4, HUB.w, 4, HUB.h, 0, '#7fd36e', 2);
   cyl(bt, FOUNTAIN.x, FOUNTAIN.y, 0.1, 520, 0.4, 520, 0, '#f1e3c4', 2);
@@ -2331,6 +2401,8 @@ function buildStatic(){
   // speed gym
   for (const t of TREADS){ box(bt, t.x, t.y, 0, 50, 6, 104, 0, '#3a404d'); for (const sx of [-27,27]){ cyl(bt, t.x+sx, t.y-48, 0, 3, 22, 3, 0, '#e8eef7'); cyl(bt, t.x+sx, t.y+48, 0, 3, 22, 3, 0, '#e8eef7'); box(bt, t.x+sx, t.y, 20, 3, 3, 100, 0, '#e8eef7'); }
     box(bt, t.x, t.y-56, 0, 50, 46, 8, 0, '#ff9a4a'); box(bt, t.x, t.y-60, 36, 40, 10, 2, 0, t.need ? '#ff5cf0' : '#7ee08a', 1); }
+}
+function buildZonesStatic(bt){
   // ---------- zones ----------
   for (let i=1;i<=NZ;i++){ const z = ZONES[i-1];
     box(bt, 0, zBottom(i)+B/2, -4, LANE*2, 4, B, 0, '#e8eef7', 2);
@@ -2991,6 +3063,7 @@ function buildDynamic(){
   for (const c of crates) if (Math.abs(c.x-P.x) < 1100 && Math.abs(c.y-P.y) < 1100) drawCrateDyn(bt, c);
   for (const e of enemies) drawEnemyDyn(bt, e);
   drawPlayerDyn(bt);
+  drawRemoteDyn(bt); drawFriendBaseDyn(bt);
   // treadmill belts
   if (P.y > 900) for (const t of TREADS) for (let k=0;k<6;k++){ const zz = t.y - 48 + ((k*16 + clock*70) % 96); box(bt, t.x, zz, 6.1, 40, 0.4, 3, 0, '#1a1c22'); }
   // portals (zone side and arena exits)
@@ -3194,6 +3267,7 @@ function labels(){
   if (near(0,520,600)) for (let i=0;i<6;i++){ const pd = PADS[i], p = proj(pd.x, 34, pd.y); if (!p) continue; const pt = partById(S.pads[i]);
     if (pt){ text('+'+Math.floor(S.padCash[i]), p.x, p.y, '#ffcf3a', 8, 'center'); text((pt.power/20).toFixed(1)+'/S', p.x, p.y+10, '#c9d2e3', 8, 'center'); }
     else if (near(pd.x, pd.y, 110)) text('EMPTY PAD', p.x, p.y+8, '#6b7080', 8, 'center'); }
+  netLabels();
   for (const f of floaters){ const p = proj(f.x, f.h, f.y); if (!p) continue; ctx.globalAlpha = Math.min(1,f.life*2); text(f.text, p.x, p.y, f.col, f.size||8, 'center'); ctx.globalAlpha = 1; }
 }
 function drawMinimap(){
@@ -3204,21 +3278,26 @@ function drawMinimap(){
     ctx.strokeStyle = '#ff5d4a'; ctx.beginPath(); ctx.arc(mx+S2/2, my+S2/2, a.r*sc, 0, 6.283); ctx.stroke();
     px(X(a.x)-3, Y(a.y+a.r-90)-3, 6, 6, '#ff5cf0');
     for (const e of enemies) if (!e.dead) px(X(e.x)-(e.kind==='boss'?3:1), Y(e.y)-(e.kind==='boss'?3:1), e.kind==='boss'?6:3, e.kind==='boss'?6:3, e.kind==='boss'?'#ff3b3b':'#ffb347');
+    { const R = NET.R; if (R && R.seen && !R.dead && arenaAt(R.x,R.y) === ai) px(X(R.x)-2, Y(R.y)-2, 4, 4, '#7ee08a'); }
     px(X(P.x)-1.5, Y(P.y)-1.5, 3, 3, '#ffffff');
     text('BOSS ARENA  (PINK = EXIT)', mx+S2/2, my+S2+2, '#ff8c7a', 8, 'center'); return; }
   if (!zoneAt(P.x,P.y) && P.y > -150){
-    const sc = S2/HUB.w, X = x => mx+(x-HUB.x)*sc, Y = y => my+(y-HUB.y)*sc;
-    px(mx-2,my-2,S2+4,S2+14,'#0b0e15'); px(mx,my,S2,S2,'#4f9a4a');
+    const bx = FRIEND_SIDES.includes(1) && P.x > HUB.w/2+24 ? DX : FRIEND_SIDES.includes(-1) && P.x < -HUB.w/2-24 ? -DX : 0, mine = !bx;
+    const sc = S2/HUB.w, X = x => mx+(x-HUB.x)*sc, Xw = x => X(x-bx), Y = y => my+(y-HUB.y)*sc;   // X: base layout, Xw: world position
+    px(mx-2,my-2,S2+4,S2+14,'#0b0e15'); px(mx,my,S2,S2,mine ? '#4f9a4a' : '#3f7f5a');
+    for (const gs of mine ? FRIEND_SIDES : [-Math.sign(bx)]) px(gs > 0 ? mx+S2-2 : mx, Y(DOOR_Y0), 2, (DOOR_Y1-DOOR_Y0)*sc, '#5fe0ff');
     px(X(BELT_X0),Y(BELT_Y0),(BELT_X1-BELT_X0)*sc,Math.max(2,(BELT_Y1-BELT_Y0)*sc),'#ffcf3a');
     for (const p of PADS) px(X(p.x)-1.5,Y(p.y)-1.5,3,3,'#c9a020');
-    for (let i=0;i<4;i++){ const y = YARD[i]; px(X(y.x)-2,Y(y.y)-2,4,4, S.yard[i] ? TIERS[S.yard[i].tier].c : '#2f6b45'); }
+    for (let i=0;i<4;i++){ const y = YARD[i], yd = mine ? S.yard[i] : NET.base && NET.base.yard[i]; px(X(y.x)-2,Y(y.y)-2,4,4, yd ? TIERS[yd.tier].c : '#2f6b45'); }
     for (const t of TREADS) px(X(t.x)-1.5,Y(t.y)-3,3,6,'#ff9a4a');
     px(X(REPAIR.x)-2,Y(REPAIR.y)-2,4,4,'#7ee08a'); px(X(FOUNTAIN.x)-3,Y(FOUNTAIN.y)-3,6,6,'#6fc8ff');
-    const blink = Math.floor(clock*3)%2; px(X(HANGAR.x)-5,Y(HANGAR.y)-5,10,10, blink ? '#5fe0ff' : '#ffffff');
-    px(X(-LANE),my,LANE*2*sc,2,'#ffffff');
-    const ppx = X(P.x), ppy = Y(P.y);
+    const blink = Math.floor(clock*3)%2; px(X(HANGAR.x)-5,Y(HANGAR.y)-5,10,10, mine ? (blink ? '#5fe0ff' : '#ffffff') : '#5a7a9a');
+    px(X(-LANE),my,LANE*2*sc,2, mine ? '#ffffff' : '#ff5cf0');
+    const R = NET.R; if (R && R.seen && !R.dead && R.y > -30 && Math.abs(R.x-bx) < HUB.w/2+30) px(Xw(R.x)-2, Y(R.y)-2, 4, 4, '#7ee08a');
+    const ppx = Xw(P.x), ppy = Y(P.y);
     for (let k=2;k<8;k++) px(ppx+Math.cos(camYaw)*k, ppy+Math.sin(camYaw)*k, 1,1,'#fff'); px(ppx-1.5, ppy-1.5, 3,3,'#ff4fd0');
-    text('BASE  (CYAN = WORKSHOP)', mx+S2/2, my+S2+2, '#5fe0ff', 8, 'center');
+    if (mine) text('BASE  (CYAN = WORKSHOP)', mx+S2/2, my+S2+2, '#5fe0ff', 8, 'center');
+    else text((R ? R.name : 'FRIEND') + "'S BASE", mx+S2/2, my+S2+2, '#7ee08a', 8, 'center');
     return;
   }
   let zi = zoneAt(P.x,P.y);
@@ -3231,6 +3310,7 @@ function drawMinimap(){
   for (const c of crates){ if (c.zone!==zi || (!sensor && Math.hypot(c.x-P.x,c.y-P.y) > 650)) continue; const blink = c.supply && Math.floor(clock*4)%2; px(mx+(c.x+Z/2)*sc-1, my+(c.y-zTop(zi))*sc-1, blink?4:3, blink?4:3, TIERS[c.tier].c); }
   { const c = arenaC(zi); const bx = mx+(c.x+Z/2)*sc, by = my+(c.y-zTop(zi))*sc; ctx.strokeStyle = bosses[zi].alive ? '#ff3b3b' : '#7a3030'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(bx, by, 230*sc, 0, 6.283); ctx.stroke(); if (bosses[zi].alive) px(bx-2, by-2, 4, 4, '#ff3b3b'); }
   for (const e of enemies) if (e.kind==='rival' && zoneAt(e.x,e.y)===zi && (sensor || Math.hypot(e.x-P.x,e.y-P.y) < 650)) px(mx+(e.x+Z/2)*sc-1, my+(e.y-zTop(zi))*sc-1, 3,3,'#ff3b3b');
+  { const R = NET.R; if (R && R.seen && !R.dead && zoneAt(R.x,R.y) === zi) px(mx+(R.x+Z/2)*sc-2, my+(R.y-zTop(zi))*sc-2, 4, 4, '#7ee08a'); }
   if (zoneAt(P.x,P.y)===zi){ const ppx = mx+(P.x+Z/2)*sc, ppy = my+(P.y-zTop(zi))*sc;
     for (let k=2;k<8;k++) px(ppx+Math.cos(camYaw)*k, ppy+Math.sin(camYaw)*k, 1,1,'#fff'); px(ppx-1.5, ppy-1.5, 3,3,'#ffffff'); }
   text('Z'+zi+' '+zn.n.toUpperCase(), mx+S2/2, my+S2+2, zn.acc, 8, 'center');
@@ -3335,7 +3415,7 @@ function drawHUD(){
     ctx.beginPath(); ctx.moveTo(0,-9); ctx.lineTo(7,5); ctx.lineTo(-7,5); ctx.closePath(); ctx.fill(); ctx.restore();
     text('WORKSHOP '+Math.round(dW/9)+'M', ax, ay+8, '#5fe0ff', 8, 'center');
   }
-  drawMinimap();
+  drawMinimap(); netBadge();
   // missions under the minimap
   { const mx = W-150, my = 120; px(mx-4, my-4, 148, 14 + S.missions.length*22, 'rgba(24,70,170,.78)');
     text('MISSIONS', mx, my-1, missionFlash > 0 ? '#7ee08a' : '#ffcf3a');
@@ -3363,6 +3443,242 @@ function drawHUD(){
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
 }
 
+/* ================= online multiplayer (PeerJS) ================= */
+// The game is a static page. PeerJS's free cloud server only introduces the two browsers;
+// after that they talk directly over WebRTC. Each player keeps their own save and their own world,
+// and just shows themselves (position, mech look, base) to the other.
+const PEER_SRC = ['https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js', 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js'];
+const NET_VER = 1, NET_HZ = 15;
+const NET = {peer:null, conn:null, role:null, side:0, code:'', status:'offline', msg:'Not connected.', R:null, base:null,
+  sendT:0, lookT:0, baseT:0, lastRecv:0, lookKey:'', joinTimer:0, retried:false};
+if (!S.name) S.name = 'PILOT ' + ri(100, 999);
+const CODE_CH = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function newRoomCode(){ const b = new Uint32Array(6); crypto.getRandomValues(b); let c = ''; for (const v of b) c += CODE_CH[v % CODE_CH.length]; return c; }
+const peerIdFor = c => 'mechwar-v1-' + c;
+const KIND_OK = new Set([].concat(...Object.values(KINDS), MELEE, FASTW, SLOWW));
+const okCol = c => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c) ? c : null;
+const num = (v, lo, hi, d) => Number.isFinite(+v) && v !== null && v !== '' ? clamp(+v, lo, hi) : d;
+const cleanName = s => String(s || '').replace(/[^A-Za-z0-9 _.\-]/g, '').trim().slice(0, 16).toUpperCase() || 'FRIEND';
+const mapIn = (x, y) => y > -24 ? x + NET.side*DX : x;   // friend's base area lands next door; zones line up as they are
+function loadPeer(i = 0){
+  return new Promise((res, rej) => {
+    if (window.Peer) return res();
+    if (i >= PEER_SRC.length) return rej(new Error('Could not download the multiplayer library'));
+    const s = document.createElement('script'); s.src = PEER_SRC[i]; s.crossOrigin = 'anonymous';
+    s.onload = () => window.Peer ? res() : loadPeer(i+1).then(res, rej);
+    s.onerror = () => { s.remove(); loadPeer(i+1).then(res, rej); };
+    document.head.appendChild(s);
+  });
+}
+function netSend(m){ try { if (NET.conn && NET.conn.open) NET.conn.send(m); } catch(e){} }
+function myLook(){
+  const L = mechLook(), sk = skin();
+  return {A:L.A, K:L.K, Zn:L.Zn, show:L.show, wt:L.wt, sc:+mS().toFixed(3), m:sk.m, p:sk.p, built:!!S.mechBuilt, pw:ST.power||0, name:S.name};
+}
+function cleanLook(m){
+  const cols = (a, n, d) => Array.isArray(a) && a.length >= n ? a.slice(0, n).map(c => okCol(c) || '#8b95a6') : d;
+  const A = {}, K = {}, Zn = {}, show = {};
+  for (const sl of SLOTS){
+    A[sl] = okCol(m.A && m.A[sl]); const k = m.K && m.K[sl];
+    K[sl] = typeof k === 'string' && KIND_OK.has(k) ? k : KINDS[sl][0];
+    Zn[sl] = Math.round(num(m.Zn && m.Zn[sl], 0, NZ, 0)); show[sl] = !!(m.show && m.show[sl]);
+  }
+  return {A, K, Zn, show, wt:Math.round(num(m.wt, 1, NR, 1)), sc:num(m.sc, 0.5, 6, 1.45), m:cols(m.m, 3, SKINS[0].m), p:cols(m.p, 6, SKINS[0].p),
+    built:!!m.built, pw:Math.round(num(m.pw, 0, 1e9, 0)), name:cleanName(m.name)};
+}
+function myBase(){
+  const now = Date.now(), part = id => { const p = partById(id); return p ? {slot:p.slot, tier:p.tier, name:p.name, area:p.area||1} : null; };
+  const parked = MECH.state === 'parked' || MECH.state === 'repair', atHangar = MECH.state === 'repair';
+  return {t:'base', pads:S.pads.map(part), yard:S.yard.map(y => y ? {tier:y.tier, supply:!!y.supply, prog:+Math.min(1, (now-y.start)/y.dur).toFixed(3)} : null),
+    mech: parked ? {st:MECH.state, x:Math.round(atHangar ? HANGAR.x : MECH.x), y:Math.round(atHangar ? HANGAR.y : MECH.y), f:+(MECH.face||0).toFixed(2)} : null};
+}
+function cleanBase(m){
+  const pads = [], yard = [];
+  for (let i=0;i<6;i++){ const p = Array.isArray(m.pads) && m.pads[i];
+    pads.push(p && SLOTS.includes(p.slot) && typeof p.name === 'string' && ITEM_BY_NAME[p.name] ? {slot:p.slot, tier:Math.round(num(p.tier,1,NR,1)), name:p.name, area:Math.round(num(p.area,1,NZ,1))} : null); }
+  for (let i=0;i<4;i++){ const y = Array.isArray(m.yard) && m.yard[i];
+    yard.push(y ? {tier:Math.round(num(y.tier,1,NR,1)), supply:!!y.supply, prog:num(y.prog,0,1,0)} : null); }
+  let mech = null;
+  if (m.mech && typeof m.mech === 'object'){ const y = num(m.mech.y,-1e5,1e5,0); mech = {st:m.mech.st === 'repair' ? 'repair' : 'parked', x:mapIn(num(m.mech.x,-1e5,1e5,0), y), y, f:num(m.mech.f,-50,50,0)}; }
+  return {pads, yard, mech};
+}
+function sendState(){
+  netSend({t:'s', x:Math.round(P.x), y:Math.round(P.y), f:+(P.face||0).toFixed(2), a:+(P.aim||0).toFixed(2), m:P.inMech?1:0, d:P.dead?1:0,
+    fl:P.fly?1:0, sh:P.shootT > 0 || clock < (P.flashT||0) ? 1 : 0, sw:P.swingT > 0 ? +(P.swingT/P.swingMax).toFixed(2) : 0});
+}
+function friendTitle(){ for (const s of signs) if (s.friendTitle) s.text = (NET.R ? NET.R.name : 'FRIEND') + "'S BASE"; }
+function onNetData(m){
+  if (!m || typeof m !== 'object' || typeof m.t !== 'string') return;
+  NET.lastRecv = performance.now();
+  const R = NET.R || (NET.R = {name:'FRIEND', x:0, y:0, tx:0, ty:0, face:0, aim:0, walk:0, amp:0, seen:false, look:null});
+  if (m.t === 'hi' || m.t === 'look'){
+    R.look = cleanLook(m); R.name = R.look.name; friendTitle();
+    if (m.t === 'hi' && !R.greeted){
+      R.greeted = true; sfx('chime');
+      note(R.name + (NET.role === 'host' ? ' joined your game!' : ' is hosting. You are in!') + ' Their base is through the ' + (NET.side > 0 ? 'east' : 'west') + ' gate.', '#7ee08a');
+      if (m.v !== NET_VER) note('Your friend has a different version of the game. Refresh both pages if things look odd.', '#ffcf3a');
+    }
+    renderNet();
+  } else if (m.t === 's'){
+    const y = num(m.y,-1e5,1e5,0);
+    R.tx = mapIn(num(m.x,-1e5,1e5,0), y); R.ty = y; R.face = num(m.f,-50,50,0); R.aim = num(m.a,-50,50,0);
+    R.inMech = !!m.m; R.dead = !!m.d; R.fly = !!m.fl; R.shoot = !!m.sh; R.swing = num(m.sw,0,1,0);
+    if (!R.seen){ R.seen = true; R.x = R.tx; R.y = R.ty; }
+  } else if (m.t === 'base') NET.base = cleanBase(m);
+  else if (m.t === 'full') netLeave('That room already has two players.');
+  else if (m.t === 'bye') netDropped(R.name + ' left the game.');
+}
+function attachConn(c){
+  NET.conn = c;
+  c.on('open', () => {
+    if (NET.conn !== c) return;
+    clearTimeout(NET.joinTimer); NET.lastRecv = performance.now();
+    ensureFriendBase(NET.side);
+    NET.lookKey = ''; NET.sendT = 0; NET.lookT = 5; NET.baseT = 0.5;
+    netSend(Object.assign({t:'hi', v:NET_VER}, myLook()));
+    setNet('online', 'Connected! Walk through the ' + (NET.side > 0 ? 'east' : 'west') + ' gate of your base to visit your friend.');
+  });
+  c.on('data', d => { if (NET.conn === c) onNetData(d); });
+  c.on('close', () => { if (NET.conn === c) netDropped((NET.R ? NET.R.name : 'Your friend') + ' disconnected.'); });
+  c.on('error', e => console.warn('peer connection', e));
+}
+function netError(peer, err){
+  if (NET.peer !== peer) return;
+  const t = err && err.type;
+  if (t === 'unavailable-id' && NET.role === 'host' && !NET.retried){ NET.retried = true; netLeave(); netHost(); return; }
+  const msg = t === 'peer-unavailable' ? 'No game with that code. Check the code, and make sure your friend is still hosting.'
+    : t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed' ? 'Can\'t reach the PeerJS server. Check your internet; some school or work networks block it.'
+    : t === 'browser-incompatible' ? 'This browser can\'t make peer-to-peer connections. Try Chrome, Edge or Firefox.'
+    : 'Connection problem (' + (t || 'unknown') + ').';
+  if (NET.status === 'online'){ console.warn('peer', err); return; }   // the direct link can outlive a signaling hiccup
+  netLeave(msg);
+}
+async function netHost(){
+  if (NET.peer) return;
+  setNet('connecting', 'Loading the multiplayer library...');
+  try { await loadPeer(); } catch(e){ return setNet('offline', e.message + '. Check your internet connection.'); }
+  if (NET.peer) return;
+  NET.role = 'host'; NET.side = 1; NET.code = newRoomCode();
+  const peer = NET.peer = new Peer(peerIdFor(NET.code), {debug:1});
+  setNet('connecting', 'Opening a room...');
+  peer.on('open', () => { if (NET.peer === peer) setNet('waiting', 'Your room is open. Send this code to your friend and wait here or keep playing.'); });
+  peer.on('connection', c => {
+    if (NET.conn){ c.on('open', () => { try { c.send({t:'full'}); } catch(e){} setTimeout(() => c.close(), 800); }); return; }
+    attachConn(c);
+  });
+  peer.on('error', err => netError(peer, err));
+  peer.on('disconnected', () => { if (NET.peer === peer && !peer.destroyed && NET.status === 'waiting') try { peer.reconnect(); } catch(e){} });
+}
+async function netJoin(raw){
+  if (NET.peer) return;
+  const code = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 6) return setNet('offline', 'Room codes are 6 letters and numbers.');
+  setNet('connecting', 'Loading the multiplayer library...');
+  try { await loadPeer(); } catch(e){ return setNet('offline', e.message + '. Check your internet connection.'); }
+  if (NET.peer) return;
+  NET.role = 'guest'; NET.side = -1; NET.code = code;
+  const peer = NET.peer = new Peer({debug:1});
+  setNet('connecting', 'Finding room ' + code + '...');
+  peer.on('open', () => { if (NET.peer !== peer) return; setNet('connecting', 'Joining room ' + code + '...'); attachConn(peer.connect(peerIdFor(code), {reliable:true})); });
+  peer.on('error', err => netError(peer, err));
+  NET.joinTimer = setTimeout(() => { if (NET.peer === peer && NET.status !== 'online')
+    netLeave('Couldn\'t connect. The room may be closed, or your network may block direct connections (common on school or work Wi-Fi).'); }, 20000);
+}
+function netDropped(msg){
+  const c = NET.conn; NET.conn = null; NET.R = null; NET.base = null; friendTitle();
+  try { if (c) c.close(); } catch(e){}
+  note(msg, '#ffcf3a');
+  if (NET.role === 'host' && NET.peer && !NET.peer.destroyed) setNet('waiting', msg + ' Your room is still open with the same code.');
+  else netLeave(msg);
+}
+function netLeave(msg){
+  netSend({t:'bye'});
+  const c = NET.conn, p = NET.peer;
+  clearTimeout(NET.joinTimer);
+  Object.assign(NET, {peer:null, conn:null, role:null, side:0, code:'', R:null, base:null});
+  try { if (c) c.close(); } catch(e){}
+  try { if (p) p.destroy(); } catch(e){}
+  friendTitle();
+  setNet('offline', msg || 'Not connected.');
+}
+function netTick(dt){
+  const R = NET.R;
+  if (R && R.seen){
+    const dx = R.tx-R.x, dy = R.ty-R.y, d = Math.hypot(dx, dy);
+    if (d > 350){ burst(R.x, R.y, '#7ee08a', 10); R.x = R.tx; R.y = R.ty; burst(R.x, R.y, '#7ee08a', 14); ring(R.x, R.y, '#7ee08a', 60); }
+    else { const k = Math.min(1, dt*12); R.x += dx*k; R.y += dy*k; R.walk += d*k*6.283/(R.inMech ? 36 : 15); }
+    R.amp += ((d > 1.5 ? 1 : 0) - R.amp)*Math.min(1, dt*8);
+  }
+  if (NET.status !== 'online' || !NET.conn) return;
+  if (performance.now() - NET.lastRecv > 12000){ netDropped('Lost the connection to ' + (R ? R.name : 'your friend') + '.'); return; }
+  NET.sendT -= dt; if (NET.sendT <= 0){ NET.sendT = 1/NET_HZ; sendState(); }
+  NET.lookT -= dt; if (NET.lookT <= 0){ NET.lookT = 1; const L = myLook(), k = JSON.stringify(L); if (k !== NET.lookKey){ NET.lookKey = k; netSend(Object.assign({t:'look'}, L)); } }
+  NET.baseT -= dt; if (NET.baseT <= 0){ NET.baseT = 3; netSend(myBase()); }
+}
+// keep the link alive while this tab is in the background (animation frames stop there)
+setInterval(() => { if (NET.status === 'online' && document.hidden) netSend({t:'p'}); }, 2000);
+addEventListener('beforeunload', () => netSend({t:'bye'}));
+function setNet(status, msg){ NET.status = status; NET.msg = msg; renderNet(); }
+function renderNet(){
+  $('netStatus').textContent = NET.msg;
+  $('netCodeShow').textContent = NET.role === 'host' && NET.code && NET.status !== 'connecting' ? NET.code : '';
+  const busy = NET.status !== 'offline';
+  $('netHostBtn').disabled = busy; $('netJoinBtn').disabled = busy; $('netCode').disabled = busy;
+  $('netLeave').hidden = !busy; $('netCopy').hidden = !(NET.role === 'host' && NET.code && NET.status !== 'connecting');
+  $('netBtn').textContent = NET.status === 'online' ? 'Online: ' + (NET.R ? NET.R.name : 'friend') + ' (P)' : NET.status === 'waiting' ? 'Hosting ' + NET.code + ' (P)' : 'Multiplayer (P)';
+}
+function toggleNet(force){
+  const on = force === undefined ? $('ovNet').hidden : force;
+  if (on){ $('netName').value = S.name; renderNet(); }
+  showOv('ovNet', on);
+}
+$('netBtn').addEventListener('click', () => toggleNet());
+$('netClose').addEventListener('click', () => toggleNet(false));
+$('netName').addEventListener('change', () => { S.name = cleanName($('netName').value); $('netName').value = S.name; NET.lookKey = ''; NET.lookT = 0; save(); });
+$('netHostBtn').addEventListener('click', () => { audioInit(); netHost(); });
+$('netJoinBtn').addEventListener('click', () => { audioInit(); netJoin($('netCode').value); });
+$('netCode').addEventListener('keydown', e => { if (e.key === 'Enter') netJoin($('netCode').value); });
+$('netLeave').addEventListener('click', () => netLeave('You left the game.'));
+$('netCopy').addEventListener('click', () => { try { navigator.clipboard.writeText(NET.code).then(() => { $('netCopy').textContent = 'Copied!'; setTimeout(() => $('netCopy').textContent = 'Copy code', 1500); }); } catch(e){} });
+renderNet();
+// ---------- drawing the friend ----------
+function drawRemoteDyn(bt){
+  const R = NET.R; if (!R || !R.seen || R.dead || !R.look) return;
+  if (Math.abs(R.x-P.x) > 1600 || Math.abs(R.y-P.y) > 1600) return;
+  const L = R.look;
+  if (R.inMech) rig(bt, R.x, R.y, R.face, {s:L.sc, body:L.m[0], dark:L.m[1], head:L.m[2], visor:L.A.Head || '#5fe0ff', light:'#7ee08a',
+    armor:L.A, kinds:L.K, zones:L.Zn, antenna:true, gun:{kind:L.K.Weapon, tier:L.wt, aim:R.aim, col:L.A.Weapon || '#5fe0ff', flash:R.shoot && Math.floor(clock*20)%2 === 0},
+    walk:R.fly ? 0 : R.walk, amp:R.fly ? 0 : R.amp, flying:R.fly, dashing:R.fly, swing:R.swing});
+  else rig(bt, R.x, R.y, R.face, {s:PILOT_S, pilot:true, body:L.p[0], dark:L.p[1], head:L.p[2], pack:L.p[3], visor:L.p[4], accent:L.p[5], light:'#7ee08a',
+    antenna:true, gun:{kind:'Pilot', col:'#5fe0ff'}, aimArm:R.shoot, walk:R.walk, amp:R.amp});
+}
+function drawFriendBaseDyn(bt){
+  const sd = NET.side; if (!sd || !FRIEND_SIDES.includes(sd) || NET.status !== 'online') return;
+  const ox = sd*DX; if (Math.abs(P.x-ox) > 1500 || P.y < -900) return;
+  const BY = (BELT_Y0+BELT_Y1)/2;
+  for (let x = BELT_X0 + (beltScroll % 30); x < BELT_X1; x += 30) box(bt, x+ox, BY, 6, 4, 0.4, BELT_Y1-BELT_Y0, 0, '#1a1c22');
+  const B = NET.base; if (!B) return;
+  for (let i=0;i<6;i++){ const p = B.pads[i]; if (!p) continue; const pd = PADS[i], bob = 16 + Math.sin(clock*2+i)*3;
+    cyl(bt, pd.x+ox, pd.y, 3, 3, bob, 3, 0, '#5fe0ff', 1); partModel(bt, pd.x+ox, pd.y, bob, p, clock*0.8+i, 1.15); }
+  for (let i=0;i<4;i++){ const y = B.yard[i]; if (!y) continue; const sl = YARD[i], col = TIERS[y.tier].c, ready = y.prog >= 1, sz = y.supply ? 30 : 22, bob = ready ? Math.abs(Math.sin(clock*4))*4 : 0;
+    box(bt, sl.x+ox, sl.y, 3+bob, sz, sz, sz, 0, '#3b3f48'); box(bt, sl.x+ox, sl.y, 3+bob+sz*0.4, sz+1, sz*0.2, sz+1, 0, col, 1);
+    if (ready) cyl(bt, sl.x+ox, sl.y, 3, 3, 120, 3, 0, col, 1); }
+  const R = NET.R, L = R && R.look, M = B.mech;
+  if (L && M && !R.inMech) rig(bt, M.x, M.y, M.f, {s:L.sc, body:L.m[0], dark:L.m[1], head:L.m[2], visor:'#2a4a5a', armor:L.A, kinds:L.K, zones:L.Zn, show:ALLSHOW,
+    gun:{kind:L.K.Weapon, tier:L.wt, col:L.A.Weapon || '#5fe0ff'}, hit:M.st === 'repair' && Math.floor(clock*3)%2 === 0});
+}
+function netLabels(){
+  const R = NET.R; if (!R || !R.seen || R.dead || !R.look || Math.hypot(R.x-P.x, R.y-P.y) > 1400) return;
+  const p = proj(R.x, R.inMech ? 42*R.look.sc : 24, R.y); if (!p) return;
+  text(R.name, p.x, p.y-12, '#7ee08a', 8, 'center');
+  if (R.inMech && R.look.pw) text('POWER ' + R.look.pw, p.x, p.y-2, '#c9d2e3', 8, 'center');
+}
+function netBadge(){
+  if (NET.status === 'online') text('ONLINE: ' + (NET.R ? NET.R.name : 'FRIEND'), W-6, 112, '#7ee08a', 8, 'right');
+  else if (NET.status === 'waiting') text('HOSTING  CODE ' + NET.code, W-6, 112, '#ffcf3a', 8, 'right');
+  else if (NET.status === 'connecting') text('CONNECTING...', W-6, 112, '#c9d2e3', 8, 'right');
+}
+
 /* ================= loop ================= */
 let glOk = false;
 try { glOk = initGL(); } catch(err){ console.error(err); glOk = false; }
@@ -3380,6 +3696,7 @@ function frame(now){
   flashT = Math.max(0, flashT - dt);
   hitMark = hitMark > 0 ? Math.max(0, hitMark - dt) : hitMark < 0 ? Math.min(0, hitMark + dt) : 0;
   dmgFlash = Math.max(0, dmgFlash - dt*1.5); missionFlash = Math.max(0, missionFlash - dt);
+  netTick(dt);
   render3D();
   drawHUD();
   chipT -= dt;
