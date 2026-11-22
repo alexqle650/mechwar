@@ -2727,7 +2727,8 @@ function rig(bt, x, z, yaw, o){
   // ----- mechs: long legs with real knees (the lower foot always touches the ground), tall chest, small head -----
   const mech = !o.pilot, biped = mech && sh.Legs && !hover && K.Legs !== 'Tank Treads' && K.Legs !== 'Spider Legs';
   const G = o.glow || o.light || '#ff7a2a', dk = o.dark;
-  const plate = sl => A[sl] ? mix(o.body, A[sl], 0.12) : o.body;
+  const plate = () => o.body;                                 // armour is gunmetal at every rarity
+  const TT = o.tiers || {}, tr = sl => TT[sl] || (A[sl] ? 3 : 2);   // the rarity shows as more armour and detail
   const LEG1 = 8.2, LEG2 = 8.8, FOOT = 1.7, LEGS = [];
   if (biped) for (const [lz, pp, phl] of [[-3.9, sw, ph], [3.9, -sw, ph + Math.PI]]){
     const kb = 0.3 + Math.max(0, Math.cos(phl))*0.75*amp, a1 = pp + kb*0.55, a2 = pp - kb*0.55;
@@ -2740,19 +2741,22 @@ function rig(bt, x, z, yaw, o){
     const qx = x0 + Math.sin(a)*start + Math.cos(a)*off, qy = y0 - Math.cos(a)*start + Math.sin(a)*off;
     part(fn, qx, qy - len, lz, w, len, d, col, md, a); };
   const mechLeg = L => {
-    const lz = L.lz, pc = plate('Legs'), a1 = L.a1, a2 = L.a2;
+    const lz = L.lz, pc = plate('Legs'), a1 = L.a1, a2 = L.a2, t = tr('Legs'), sd = lz > 0 ? 1 : -1;
     const kx = Math.sin(a1)*LEG1, ky = hipY - Math.cos(a1)*LEG1, fx = kx + Math.sin(a2)*LEG2, fy = ky - Math.cos(a2)*LEG2;
     part(sph,0,hipY-2.3,lz,4.6,4.6,4.6,dk);                                  // hip joint
     segAt(cyl,0,hipY,a1,0,0,LEG1,2.6,2.6,lz,dk);                             // thigh frame
     segAt(box,0,hipY,a1,0.6,0.5,6.4,5.6,5.4,lz,pc);                          // thigh armour
-    segAt(box,0,hipY,a1,1.6,-0.4,3.8,3.2,6,lz,shade(pc,0.8));                // thigh side plate
-    segAt(box,0,hipY,a1,2.2,3.35,3.2,0.35,0.45,lz,G,1);                      // thigh light
+    if (t >= 3) segAt(box,0,hipY,a1,1.6,-0.4,3.8,3.2,6,lz,shade(pc,0.8));     // thigh side plate
+    if (t >= 4) segAt(box,0,hipY,a1,2.2,3.35,3.2,0.35,0.45,lz,G,1);          // thigh light
+    if (t >= 6) segAt(box,0,hipY,a1,1,0.6,5,1.2,0.6,lz+sd*3,shade(pc,1.2));  // thigh fin
     part(sph,kx,ky-1.9,lz,3.8,3.8,3.8,dk);                                   // knee joint
-    segAt(box,kx,ky,a2,-1.6,1.9,3.6,2.4,4.8,lz,shade(pc,1.18));              // knee guard
+    if (t >= 2) segAt(box,kx,ky,a2,-1.6,1.9,3.6,2.4,4.8,lz,shade(pc,1.18));  // knee guard
+    if (t >= 7) part(cyl,kx,ky-2.1,lz,4.4,0.3,4.4,G,1);                       // knee light ring
     segAt(cyl,kx,ky,a2,0,0,LEG2,2.4,2.4,lz,dk);                              // shin frame
     segAt(box,kx,ky,a2,1.4,0.8,6.2,4.6,5,lz,pc);                             // shin armour
-    segAt(box,kx,ky,a2,1.8,-1.7,4.6,2.6,4.2,lz,shade(pc,0.78));              // calf
-    for (const dz of [-1.2,1.2]) segAt(box,kx,ky,a2,2.6,3.15,2.2,0.35,0.35,lz+dz,G,1);   // shin light slits
+    if (t >= 3){ segAt(box,kx,ky,a2,1.8,-1.7,4.6,2.6,4.2,lz,shade(pc,0.78));   // calf
+      for (const dz of [-1.2,1.2]) segAt(box,kx,ky,a2,2.6,3.15,2.2,0.35,0.35,lz+dz,G,1); }   // shin light slits
+    if (t >= 8 && K.Legs !== 'Thruster Legs' && !jet) segAt(box,kx,ky,a2,4.4,-2.9,1.6,0.5,2.6,lz,G,1);   // calf vent
     if (K.Legs === 'Piston Legs') segAt(cyl,kx,ky,a2,0.4,-3,7,1.1,1.1,lz,'#b7c0cf');
     if (K.Legs === 'Thruster Legs' || jet){ const tx = kx + Math.sin(a2)*6 - 2.8, tyy = ky - Math.cos(a2)*6;
       part(cyl,tx,tyy-1.5,lz,2.4,3,2.4,'#2a2e36'); part(sph,tx-0.4,tyy-2.4,lz,1.8,1.8,1.8,o.dashing ? '#ffd23f' : '#ff7a2a',1);
@@ -2760,6 +2764,7 @@ function rig(bt, x, z, yaw, o){
     part(sph,fx,fy-0.6,lz,2.6,2.6,2.6,dk);                                   // ankle
     const gy = Math.max(0, fy - FOOT);
     part(box,fx+1.4,gy,lz,8,1.8,5.4,dk); part(box,fx+4.9,gy+0.2,lz,2.6,1.4,5,pc,0,-0.3); part(box,fx-2.4,gy,lz,2.4,2.2,4.4,pc);
+    if (t >= 5) part(box,fx-3.8,gy+1.4,lz,2.8,1,1.4,shade(pc,1.15),0,0.5);   // heel spur
     if (A.Legs) deco('Legs',kx+2,ky+1,lz,0.7);
   };
   if (jet && sh.Torso){ // flying mech: swept wings and twin jet engines on the back
@@ -2810,7 +2815,7 @@ function rig(bt, x, z, yaw, o){
       part(box,0.5,ty+7.6,0,7.6,2.4,10,shade(o.body,1.15)); part(box,4.3,ty+3.6,0,0.6,2.8,2.8,o.accent,1); part(cyl,0,ty+9.6,0,5.4,1.4,5.4,o.dark);
       part(box,4.3,ty+3.6,-3.4,0.5,4.6,0.8,shade(o.body,0.7)); part(box,4.3,ty+3.6,3.4,0.5,4.6,0.8,shade(o.body,0.7));
     }
-    else { const pc = plate('Torso'), hi = shade(pc,1.14), lo = shade(pc,0.78);
+    else { const pc = plate('Torso'), hi = shade(pc,1.14), lo = shade(pc,0.78), t = tr('Torso');
       part(box,0,ty-2.6,0,5.8,3.4,9.2,dk);                                     // pelvis
       part(box,2.6,ty-3,0,1.6,3.8,3.8,hi,0,0.18);                              // hip guard
       for (const sd of [-1,1]) part(box,0.4,ty-3.4,sd*4.9,5.6,3.6,1.1,lo);      // side skirts
@@ -2819,13 +2824,19 @@ function rig(bt, x, z, yaw, o){
       for (const sd of [-1,1]) part(box,2.2,ty+0.8,sd*1.3,0.3,2.6,0.35,G,1);   // circuit lines
       part(box,0.4,ty+3.6,0,6.6,1.9,8.6,pc); part(box,0.8,ty+5.6,0,7.4,1.9,10,pc);   // abdomen bands
       part(box,0,ty+7.6,0,9.4,6.4,14.4,pc);                                    // chest
-      for (const sd of [-1,1]) part(box,4.2,ty+8.6,sd*3.5,2.6,5.2,6.8,hi,0,-0.32,-sd*0.24);   // faceted chest plates
-      part(box,5.1,ty+7.8,0,1.4,2.2,3,lo,0,0.3);                               // sternum
-      part(sph,5.7,ty+10.4,0,0.9,1.6,1.6,G,1);                                 // core light
-      for (const sd of [-1,1]) for (let k=0;k<3;k++) part(box,1.6-k*1.7,ty+8.9,sd*7.25,0.45,3,0.3,G,1);   // side vents
-      part(box,-0.8,ty+13.8,0,7.4,1.8,9.2,dk);                                 // collar
+      if (t >= 3) for (const sd of [-1,1]) part(box,4.2,ty+8.6,sd*3.5,2.6,5.2,6.8,hi,0,-0.32,-sd*0.24);   // faceted chest plates
+      else part(box,4.6,ty+8.4,0,1.4,5,11,hi);                                  // plain chest plate
+      if (t >= 2) part(box,5.1,ty+7.8,0,1.4,2.2,3,lo,0,0.3);                   // sternum
+      const tc = tr('Core'); part(sph,5.7,ty+10.4,0,0.5+tc*0.12,0.9+tc*0.2,0.9+tc*0.2,G,1);   // core light: bigger at higher core rarity
+      if (tc >= 6) for (const sd of [-1,1]) part(box,5.9,ty+10.4,sd*(1.4+tc*0.12),0.3,0.4,1.4,G,1);
+      if (t >= 4) for (const sd of [-1,1]) for (let k=0;k<3;k++) part(box,1.6-k*1.7,ty+8.9,sd*7.25,0.45,3,0.3,G,1);   // side vents
+      if (t >= 2) part(box,-0.8,ty+13.8,0,7.4,1.8,9.2,dk);                      // collar
+      if (t >= 5) for (const sd of [-1,1]) part(box,-5,ty+13.6,sd*5.6,3.6,4.4,0.8,hi,0,0.4);   // back fins
+      if (t >= 6) part(box,3.6,ty+11.6,0,2.6,1.8,12,hi,0,-0.2);                 // upper chest overplate
+      if (t >= 7) for (const sd of [-1,1]){ part(box,-7,ty+10,sd*7.6,1.4,12,7,lo,0,0.4,sd*0.5); part(box,-8.4,ty+19.6,sd*9.6,0.5,0.8,4,G,1,0.4,sd*0.5); }   // back wings
+      if (t >= 8) for (let k=0;k<11;k++){ const an = Math.PI*(0.05 + k/10*0.9); part(sph,-8.4,ty+16+Math.sin(an)*10,Math.cos(an)*10,1.4,1.4,1.4,G,1); }   // halo
       part(box,-6.2,ty+7.8,0,3.6,7.6,10.4,dk);                                 // backpack
-      if (!jet) for (const sd of [-1,1]){                                      // boosters
+      if (!jet && t >= 2) for (const sd of [-1,1]){                            // boosters
         part(box,-8.2,ty+5.8,sd*3.6,1.8,3,2.8,'#2a2e36');
         const fl = o.dashing ? 1 : 0.25 + amp*0.25;
         part(sph,-9.4-fl*2.4,ty+6.2,sd*3.6,1.4+fl*2.8,1.2+fl*0.8,1.2+fl*0.8,o.dashing ? '#ffb347' : G,1); } }
@@ -2851,21 +2862,26 @@ function rig(bt, x, z, yaw, o){
     const ra = mel ? (o.swing > 0 ? 2.7 - 2.5*(1-o.swing) : 0.45 + sw*0.3) : o.aimArm ? 1.5 : sw*0.9, la = -sw*0.9, aw = K.Arms === 'Hydraulic Arms' ? 4.6 : 3.5, sy = o.pilot ? ty+7 : ty+12.6;
     const gunArm = !mel && o.gun && o.gun.kind !== 'Pilot' && sh.Weapon;
     const mechArm = (lz, pp, melee, holds) => {
-      const ld = lz > 0 ? 1 : -1, pc = plate('Arms'), hi = shade(pc,1.15), lo = shade(pc,0.8), U1 = 6.4, U2 = 6.6, sy0 = sy - 2.2;
+      const ld = lz > 0 ? 1 : -1, pc = plate('Arms'), hi = shade(pc,1.15), lo = shade(pc,0.8), U1 = 6.4, U2 = 6.6, sy0 = sy - 2.2, t = tr('Arms');
       const a1 = melee ? pp : holds ? 0.72 + (o.recoil||0)*0.12 : pp*0.9, a2 = melee ? pp : holds ? 1.5 : a1 + 0.38 + Math.max(0, -pp)*0.4;
       const ex = Math.sin(a1)*U1, ey = sy0 - Math.cos(a1)*U1, hx = ex + Math.sin(a2)*U2, hy = ey - Math.cos(a2)*U2;
       part(sph,0,sy0-2.6,lz,5.2,5.2,5.2,dk);                                  // shoulder joint
-      part(box,0.3,sy-3.4,lz+ld*1.2,9.8,6.6,7.4,pc);                         // pauldron
-      part(box,0.3,sy+3.2,lz+ld*1,8.6,1.4,6,hi);                             // pauldron top
-      part(box,4.9,sy-0.8,lz+ld*1.2,1.4,5.4,6.6,hi,0,-0.25);                 // pauldron front facet
-      part(box,-0.4,sy-2.6,lz+ld*5.1,8.6,5.6,0.8,lo);                        // pauldron side
-      part(box,5.7,sy+1.4,lz+ld*1.2,0.4,0.7,5.2,G,1); part(box,1.2,sy-0.6,lz+ld*5.6,4.6,0.6,0.3,G,1);
+      if (t >= 2) part(box,0.3,sy-3.4,lz+ld*1.2,9.8,6.6,7.4,pc);             // pauldron
+      else part(box,0.3,sy-1.6,lz+ld*0.8,6.4,3.6,5.4,pc);                    // small shoulder cap
+      if (t >= 3){ part(box,0.3,sy+3.2,lz+ld*1,8.6,1.4,6,hi); part(box,4.9,sy-0.8,lz+ld*1.2,1.4,5.4,6.6,hi,0,-0.25); }   // top + front facet
+      if (t >= 5) part(box,-0.4,sy-2.6,lz+ld*5.1,8.6,5.6,0.8,lo);            // pauldron side
+      if (t >= 4){ part(box,5.7,sy+1.4,lz+ld*1.2,0.4,0.7,5.2,G,1); part(box,1.2,sy-0.6,lz+ld*5.6,4.6,0.6,0.3,G,1); }
+      if (t >= 5) for (const dx of [-2.4,1.6]) part(box,dx,sy+4.4,lz+ld*2.2,1.4,2.6+t*0.25,1.4,shade(pc,1.3),0,0.45);   // shoulder spikes
+      if (t >= 6) part(box,-1.4,sy+4.4,lz+ld*4.6,6,4+t*0.5,0.9,shade(pc,1.25),0,0.35);  // shoulder fin
+      if (t >= 7){ part(box,0,sy-4.8,lz+ld*2.6,11,2.6,8.4,lo); part(box,6,sy-3.6,lz+ld*2.6,0.4,0.6,6,G,1); }   // second pauldron layer
+      if (t >= 8) part(box,-3.4,sy+2,lz+ld*6.4,2,9,1,shade(pc,1.3),0,0.55);  // tall rear blade
       segAt(cyl,0,sy0,a1,0,0,U1,2.8,2.8,lz,dk);                              // upper arm
       segAt(box,0,sy0,a1,1.8,0,4,4.2,4.4,lz,shade(pc,0.9));
       part(sph,ex,ey-1.7,lz,3.4,3.4,3.4,dk);                                 // elbow
       segAt(box,ex,ey,a2,0.2,0,6.2,5,5.4,lz,pc);                             // forearm armour
       segAt(box,ex,ey,a2,0.6,2.4,4.6,0.8,4.4,lz,hi);
-      for (let k=0;k<3;k++) segAt(box,ex,ey,a2,1.6+k*1.4,0,0.35,3,0.3,lz+ld*2.75,K.Arms === 'Rage Arms' ? '#ff3b3b' : G,1);   // grille
+      if (t >= 4) for (let k=0;k<3;k++) segAt(box,ex,ey,a2,1.6+k*1.4,0,0.35,3,0.3,lz+ld*2.75,K.Arms === 'Rage Arms' ? '#ff3b3b' : G,1);   // grille
+      if (t >= 6) segAt(box,ex,ey,a2,0.6,-2.6,4.6,0.8,3,lz,hi);             // forearm fin
       part(box,hx,hy-1.4,lz,2.8,2.8,3,dk,0,a2);                              // hand
       if (!melee && !holds) for (const dz of [-1,0,1]){ const fx2 = hx + Math.sin(a2)*1.8, fy2 = hy - Math.cos(a2)*1.8;
         part(box,fx2,fy2-1.6,lz+dz*0.95,0.7,1.8,0.6,dk,0,a2+0.3); part(sph,fx2+Math.sin(a2+0.3)*1.8,fy2-Math.cos(a2+0.3)*1.8-0.4,lz+dz*0.95,0.6,0.6,0.6,G,1); }
@@ -2947,17 +2963,21 @@ function rig(bt, x, z, yaw, o){
       part(cyl,0,ty+11.4,-4.9,3,3.2,1.6,o.dark); part(cyl,0,ty+11.4,4.9,3,3.2,1.6,o.dark);
       part(sph,0,ty+12.4,-5.6,1.4,1.4,1.4,o.accent,1); part(sph,0,ty+12.4,5.6,1.4,1.4,1.4,o.accent,1);
     } else {
-      const hc = A.Head ? mix(o.head, A.Head, 0.16) : o.head, hk = K.Head, hb = ty + 15.4;
+      const hc = o.head, hk = K.Head, hb = ty + 15.4, t = tr('Head');
       part(cyl,0,ty+14.4,0,3.4,1.6,3.4,dk);                                   // neck
       part(sph,-0.6,hb,0,7.4,6.8,6.8,hc);                                     // helmet shell
-      part(box,-1.2,hb+4.6,0,5.6,2.2,5.8,shade(hc,1.12),0,0.12);             // crown plate
-      part(box,2.4,hb+0.6,0,3.6,3.8,5.6,shade(hc,0.85),0,-0.32);             // faceplate
-      part(box,3.2,hb-0.2,0,2.2,1.6,4,dk,0,0.4);                              // jaw
-      for (const sd of [-1,1]){ part(box,-0.4,hb+1.6,sd*3.4,4.4,2.6,0.9,shade(hc,0.72)); part(box,0.8,hb+2.6,sd*3.9,2.2,0.4,0.3,G,1); }   // cheek vents
+      if (t >= 3) part(box,-1.2,hb+4.6,0,5.6,2.2,5.8,shade(hc,1.12),0,0.12);   // crown plate
+      if (t >= 2){ part(box,2.4,hb+0.6,0,3.6,3.8,5.6,shade(hc,0.85),0,-0.32); part(box,3.2,hb-0.2,0,2.2,1.6,4,dk,0,0.4); }   // faceplate + jaw
+      if (t >= 3) for (const sd of [-1,1]){ part(box,-0.4,hb+1.6,sd*3.4,4.4,2.6,0.9,shade(hc,0.72)); part(box,0.8,hb+2.6,sd*3.9,2.2,0.4,0.3,G,1); }   // cheek vents
+      if (t >= 4) for (const sd of [-1,1]) part(box,-2.6,hb+3,sd*3.7,4,1,0.6,shade(hc,0.7),0,0.3);   // side fins
+      if (t >= 5) for (const sd of [-1,1]){ part(cyl,-2,hb+5.6,sd*2,0.5,4,0.5,dk); part(sph,-2,hb+9.6,sd*2,0.8,0.8,0.8,G,1); }   // antennas
+      if (t >= 6) part(box,-0.6,hb+6.6,0,6,1.6,0.8,shade(hc,1.2),0,0.25);   // crest blade
+      if (t >= 7) part(box,-3.8,hb+0.8,0,2,5,6,shade(hc,0.8));               // back plate
+      if (t >= 8) for (const sd of [-1,1]) part(box,0.4,hb+6,sd*2.8,1,3.6,0.8,G,1,0.5);   // glowing horns
       if (hk === 'Optic Helm'){ part(box,3.9,hb+1.4,0.9,1.6,2.4,2.4,dk); part(sph,4.5,hb+1.6,0.9,2,2,2,o.visor,1); }   // mono-eye
       else if (hk === 'Visor Unit' || hk === 'Crown Visor') part(box,4.5,hb+2.4,0,0.5,1.1,5.4,o.visor,1);
       else { part(box,4.5,hb+2.7,0,0.5,0.7,4.4,o.visor,1); part(sph,4.4,hb+1.6,1.4,1.2,1.2,1.2,o.visor,1); }
-      if (hk === 'Sensor Dome') part(sph,-0.8,hb+5.6,0,4.6,3.2,4.6,A.Head || G,1);
+      if (hk === 'Sensor Dome') part(sph,-0.8,hb+5.6,0,4.6,3.2,4.6,G,1);
       if (hk === 'Crown Visor') for (const [a2,b2] of [[-2.4,-2.2],[-2.4,2.2],[-0.6,0]]) part(box,a2,hb+6.6,b2,1.2,a2 === -0.6 ? 3.6 : 2.4,1.2,'#ffd23f',1);
       if (hk === 'Battle Helm') for (const sd of [-1,1]) part(box,-1.8,hb+5.4,sd*2.6,1.4,4.6,1,shade(hc,1.25),0,0.6);
       if (hk === 'Lucky Helm') part(box,-1.2,hb+6.8,0,1,2,1,'#5fd35f',1);
@@ -2981,25 +3001,27 @@ function rig(bt, x, z, yaw, o){
   if (o.shield) sph(ALPHA, x, z, -2*s, 40*s, 44*s, 40*s, 0, '#5fe0ff', 5);
   if (o.hit && !o.ghost) sph(ALPHA, x, z, 0, (o.pilot ? 15 : 28)*s, (o.pilot ? 26 : 46)*s, (o.pilot ? 15 : 28)*s, 0, '#ffffff', 5);
 }
+function fn_pip(bt, x, z, h, k, col){ box(bt, x, z, Math.max(0, h), 1.4*k, 1.4*k, 1.4*k, 0, col, 1); }
 function partModel(bt, x, z, base, p, yaw, k){
-  const slot = p.slot, col = TIERS[p.tier].c, kind = kindOf(p), c = Math.cos(yaw), sn = Math.sin(yaw);
+  k = k*(0.82 + p.tier*0.045);   // higher rarity: a bigger part (shown by shape and size, not colour)
+  const slot = p.slot, col = '#ff7a2a', plate = '#5d646f', kind = kindOf(p), c = Math.cos(yaw), sn = Math.sin(yaw);
   const pt = (fn,lx,ly,lz,sx,sy,sz,cl,m) => fn(bt, x + (lx*c - lz*sn)*k, z + (lx*sn + lz*c)*k, base + ly*k, sx*k, sy*k, sz*k, yaw, cl, m);
-  const steel = '#6a7384', dark = '#3a404c';
+  const steel = '#4b525c', dark = '#1f2329';
   if (slot === 'Head'){
     pt(cyl,0,0,0,9,6,9,steel); pt(sph,0,2.6,0,9,6.4,9,steel);
     if (kind === 'Sensor Dome') pt(sph,0,5,0,7,6,7,col,1); else if (kind === 'Crown Visor'){ pt(box,0,6,0,9.4,2,9.4,'#ffd23f'); for (const [a,b] of [[-3.6,-3.6],[3.6,-3.6],[-3.6,3.6],[3.6,3.6]]) pt(box,a,8,b,1.6,2.6,1.6,'#ffd23f',1); } else pt(cyl,0,6,0,10,2.4,10,col);
     if (kind === 'Visor Unit' || kind === 'Crown Visor') pt(box,4.3,1.5,0,1.2,3.2,8.6,col,1); else if (kind === 'Optic Helm') pt(sph,4.2,1.6,0,3.4,3.4,3.4,col,1); else pt(box,4.4,2,0,1,2,6,col,1);
   } else if (slot === 'Torso'){
     pt(box,0,0,0,8.4,11,13,steel); pt(sph,0.5,6,0,8.6,8,13.4,steel);
-    const th = kind === 'Hull Plate' ? 2.8 : 1.5; pt(box,4.4+th/2-0.6,1.5,0,th,8.4,11.4,col); pt(box,-5.6,1,0,4.2,9,9,shade(col,0.6));
+    const th = kind === 'Hull Plate' ? 2.8 : 1.5; pt(box,4.4+th/2-0.6,1.5,0,th,8.4,11.4,plate); pt(box,-5.6,1,0,4.2,9,9,shade(plate,0.6)); pt(box,5.4,6,0,0.4,0.8,8,col,1);
     if (kind === 'Shield Frame'){ pt(sph,-5.6,11,-3,2.4,2.4,2.4,'#5fe0ff',1); pt(sph,-5.6,11,3,2.4,2.4,2.4,'#5fe0ff',1); }
     if (kind === 'Reactive Plate') for (const [a,b] of [[-3,-3],[3,-3],[-3,3],[3,3],[0,0]]) pt(box,5.6,5+a*0.6,b,2.4,1.6,1.6,'#ff6a2a',1);
   } else if (slot === 'Arms'){
-    for (const lz of [-6,6]){ pt(sph,0,8,lz,5,5,5,dark); pt(cyl,0,0,lz,kind==='Hydraulic Arms'?4.6:3.5,9,kind==='Hydraulic Arms'?4.6:3.5,dark); pt(sph,0,9,lz,7,3.6,7,col); pt(sph,0,-2,lz,4,4,4,steel);
-      if (kind === 'Grip Arms'){ pt(box,1.6,-3.4,lz-1.3,3,1.2,1,col); pt(box,1.6,-3.4,lz+1.3,3,1.2,1,col); } }
+    for (const lz of [-6,6]){ pt(sph,0,8,lz,5,5,5,dark); pt(cyl,0,0,lz,kind==='Hydraulic Arms'?4.6:3.5,9,kind==='Hydraulic Arms'?4.6:3.5,dark); pt(box,0,8,lz,8,4.4,7,plate); pt(box,3.6,8.6,lz,0.4,0.6,6,col,1); pt(sph,0,-2,lz,4,4,4,steel);
+      if (kind === 'Grip Arms'){ pt(box,1.6,-3.4,lz-1.3,3,1.2,1,plate); pt(box,1.6,-3.4,lz+1.3,3,1.2,1,plate); } }
   } else if (slot === 'Legs'){
     if (kind === 'Hover Legs'){ for (const lz of [-4,4]){ pt(sph,0,0,lz,8,4.4,6.4,dark); pt(cyl,0,-1,lz,5,1,5,col,1); } pt(box,0,4,0,6,2.5,12,steel); }
-    else for (const lz of [-3.5,3.5]){ const lw = kind==='Piston Legs'?5.6:4.2; pt(cyl,0,0,lz,lw,10,lw,dark); pt(box,0.9,-1,lz,6.6,1.9,5,shade(dark,0.8)); pt(box,1.8,2,lz,1.8,7.5,lw+0.7,col); pt(sph,0,8.4,lz,4.8,4.8,4.8,steel);
+    else for (const lz of [-3.5,3.5]){ const lw = kind==='Piston Legs'?5.6:4.2; pt(cyl,0,0,lz,lw,10,lw,dark); pt(box,0.9,-1,lz,6.6,1.9,5,shade(dark,0.8)); pt(box,1.8,2,lz,1.8,7.5,lw+0.7,plate); pt(box,2.8,4,lz,0.4,2.4,0.5,col,1); pt(sph,0,8.4,lz,4.8,4.8,4.8,steel);
       if (kind==='Thruster Legs') pt(sph,-2.6,3,lz,2.4,2.4,2.4,'#ff7a2a',1); if (kind==='Piston Legs') pt(cyl,2.9,1,lz,1.3,7.7,1.3,'#b7c0cf'); }
   } else if (slot === 'Weapon' && MELEE.includes(kind)){
     if (kind === 'Spear'){ pt(cyl,0,0,0,1.6,30,1.6,'#8a6a4a'); pt(sph,0,28,0,3,9,3,col,1); }
@@ -3015,12 +3037,13 @@ function partModel(bt, x, z, base, p, yaw, k){
     if (kind === 'Power Cell'){ pt(box,0,7.8,0,2,2,4,col,1); }
     if (kind === 'Singularity Core'){ pt(sph,0,9,0,3,3,3,'#ffffff',1); pt(cyl,0,3,0,11,0.6,11,col,1); }
   }
+  for (let i=0;i<p.tier;i++){ const an = i/p.tier*6.283 + yaw; fn_pip(bt, x + Math.cos(an)*9*k, z + Math.sin(an)*9*k, base - 3*k, k, col); }
 }
 function mechLook(){
-  const A = {}, show = {}, K = {}, Zn = {};
-  for (const sl of SLOTS){ const p = partById(S.eq[sl]); A[sl] = p ? TIERS[p.tier].c : null; show[sl] = !!p; K[sl] = kindOf(p); Zn[sl] = p ? (p.area || (ITEM_BY_NAME[p.name]||{}).area || 1) : 0; }
+  const A = {}, show = {}, K = {}, Zn = {}, T = {};
+  for (const sl of SLOTS){ const p = partById(S.eq[sl]); A[sl] = p ? TIERS[p.tier].c : null; T[sl] = p ? p.tier : 0; show[sl] = !!p; K[sl] = kindOf(p); Zn[sl] = p ? (p.area || (ITEM_BY_NAME[p.name]||{}).area || 1) : 0; }
   const wt = (partById(S.eq.Weapon)||{tier:1}).tier;
-  return {A, show, K, wt, Zn};
+  return {A, show, K, wt, Zn, T};
 }
 function drawPlayerDyn(bt){
   const L = mechLook();
@@ -3032,18 +3055,18 @@ function drawPlayerDyn(bt){
     }
     const SM = skin().m;
     rig(bt, mx, my, MECH.face, {s:mS(), body:SM[0], dark:SM[1], head:SM[2], visor: MECH.state==='parked' ? '#2a4a5a' : '#1a1d22',
-      armor:L.A, kinds:L.K, zones:L.Zn, show: built ? ALLSHOW : L.show, gun:{kind:L.K.Weapon, tier:L.wt, col:L.A.Weapon||'#5fe0ff'}, noShadow: !built && !L.show.Legs,
+      armor:L.A, tiers:L.T, kinds:L.K, zones:L.Zn, show: built ? ALLSHOW : L.show, gun:{kind:L.K.Weapon, tier:L.wt, col:L.A.Weapon||'#5fe0ff'}, noShadow: !built && !L.show.Legs,
       hit: MECH.state === 'repair' && Math.floor(clock*3)%2 === 0});
   }
   if (P.dead) return;
   const hit = P.hurtT > 0 && Math.floor(P.hurtT*30)%2 === 0, leanP = P.amp*0.5 + (P.dashT > 0 ? 1.5 : 0) - (P.recoilK||0)*0.9;
   for (const g of GHOSTS){ const gc = shade(P.inMech ? '#5fe0ff' : '#9be7ff', 0.4 + g.life*2);
-    if (g.mech) rig(ALPHA, g.x, g.y, g.face, {s:mS(), body:'#000000', dark:'#000000', head:'#000000', visor:'#000000', armor:L.A, kinds:L.K, zones:{}, show:ALLSHOW, ghost:gc, noShadow:true, walk:g.walk, amp:g.amp, lean:1.5});
+    if (g.mech) rig(ALPHA, g.x, g.y, g.face, {s:mS(), body:'#000000', dark:'#000000', head:'#000000', visor:'#000000', armor:L.A, tiers:L.T, kinds:L.K, zones:{}, show:ALLSHOW, ghost:gc, noShadow:true, walk:g.walk, amp:g.amp, lean:1.5});
     else rig(ALPHA, g.x, g.y, g.face, {s:PILOT_S, pilot:true, body:'#000', dark:'#000', head:'#000', pack:'#000', visor:'#000', accent:'#000', ghost:gc, noShadow:true, walk:g.walk, amp:g.amp, lean:1.5}); }
   if (P.inMech){
     const SM = skin().m;
     rig(bt, P.x, P.y, P.face, {s:mS(), body:SM[0], dark:SM[1], head:SM[2], visor: '#ff8a3a', light:'#ff7a2a',
-      armor:L.A, kinds:L.K, zones:L.Zn, antenna:true, gun:{kind:L.K.Weapon, tier:L.wt, aim:P.aim, col:L.A.Weapon||'#5fe0ff', flash: clock < (P.flashT||0)},
+      armor:L.A, tiers:L.T, kinds:L.K, zones:L.Zn, antenna:true, gun:{kind:L.K.Weapon, tier:L.wt, aim:P.aim, col:'#ff7a2a', flash: clock < (P.flashT||0)},
       walk:P.fly ? 0 : P.walk, amp:P.fly ? 0 : P.amp, lift:P.lift||0, flying:P.fly, hit, dashing: P.dashT > 0 || P.fly, swing: P.swingT > 0 ? P.swingT/P.swingMax : 0, shield: (P.shieldHitT > 0 || P.odT > 0) && P.shield > 0,
       lean:leanP, recoil:P.recoilK||0});
   } else {
@@ -3079,7 +3102,7 @@ function drawEnemyBody(bt, e){
   const body = boss ? mix('#2a2d36', ZONES[zone-1].acc, e.hp < e.max/2 ? 0.35 : 0.18) : e.kind==='chaser' ? '#4a2340' : e.kind==='wave' ? '#5c5236' : '#4a4f57';
   const eye = boss ? '#ff3b3b' : e.kind==='chaser' ? '#ff4fd0' : e.kind==='wave' ? '#ffd23f' : '#ffb347';
   rig(bt, e.x, e.y, e.ang, {s:e.sc, body, dark:'#1c1f24', head:shade(body,1.12), visor:eye, light:eye, kinds:{Head:'Optic Helm'},
-    gun:{kind:ENEMY_GUN[e.kind], aim:e.ang, col:eye, tier:1}, walk:e.walk, amp:e.amp||0, lean:(e.amp||0)*0.45, spikes:boss, stripes:e.kind==='wave', hit:e.hitT > 0, antenna:boss, armor: boss ? {Arms:ZONES[zone-1].acc, Torso:ZONES[zone-1].acc, Legs:shade(ZONES[zone-1].acc,0.7)} : undefined});
+    gun:{kind:ENEMY_GUN[e.kind], aim:e.ang, col:eye, tier:1}, walk:e.walk, amp:e.amp||0, lean:(e.amp||0)*0.45, spikes:boss, stripes:e.kind==='wave', hit:e.hitT > 0, antenna:boss, tiers:(() => { const t = boss ? 8 : Math.min(7, 1 + Math.ceil(zone*0.8)); return {Head:t, Torso:t, Arms:t, Legs:t, Core:t, Weapon:t}; })(), armor: boss ? {Arms:ZONES[zone-1].acc, Torso:ZONES[zone-1].acc, Legs:shade(ZONES[zone-1].acc,0.7)} : undefined});
 }
 function drawCreature(bt, e, zone, boss){
   const s = e.sc, a = e.ang, C = Math.cos(a), Sn = Math.sin(a), x = e.x, z = e.y;
@@ -3713,17 +3736,17 @@ function loadPeer(i = 0){
 function netSend(m){ try { if (NET.conn && NET.conn.open) NET.conn.send(m); } catch(e){} }
 function myLook(){
   const L = mechLook(), sk = skin();
-  return {A:L.A, K:L.K, Zn:L.Zn, show:L.show, wt:L.wt, sc:+mS().toFixed(3), m:sk.m, p:sk.p, built:!!S.mechBuilt, pw:ST.power||0, name:S.name};
+  return {A:L.A, K:L.K, Zn:L.Zn, T:L.T, show:L.show, wt:L.wt, sc:+mS().toFixed(3), m:sk.m, p:sk.p, built:!!S.mechBuilt, pw:ST.power||0, name:S.name};
 }
 function cleanLook(m){
   const cols = (a, n, d) => Array.isArray(a) && a.length >= n ? a.slice(0, n).map(c => okCol(c) || '#8b95a6') : d;
-  const A = {}, K = {}, Zn = {}, show = {};
+  const A = {}, K = {}, Zn = {}, show = {}, T = {};
   for (const sl of SLOTS){
-    A[sl] = okCol(m.A && m.A[sl]); const k = m.K && m.K[sl];
+    A[sl] = okCol(m.A && m.A[sl]); T[sl] = Math.round(num(m.T && m.T[sl], 0, NR, 0)); const k = m.K && m.K[sl];
     K[sl] = typeof k === 'string' && KIND_OK.has(k) ? k : KINDS[sl][0];
     Zn[sl] = Math.round(num(m.Zn && m.Zn[sl], 0, NZ, 0)); show[sl] = !!(m.show && m.show[sl]);
   }
-  return {A, K, Zn, show, wt:Math.round(num(m.wt, 1, NR, 1)), sc:num(m.sc, 0.5, 6, 1.45), m:cols(m.m, 3, SKINS[0].m), p:cols(m.p, 6, SKINS[0].p),
+  return {A, K, Zn, T, show, wt:Math.round(num(m.wt, 1, NR, 1)), sc:num(m.sc, 0.5, 6, 1.45), m:cols(m.m, 3, SKINS[0].m), p:cols(m.p, 6, SKINS[0].p),
     built:!!m.built, pw:Math.round(num(m.pw, 0, 1e9, 0)), name:cleanName(m.name)};
 }
 function myBase(){
@@ -3892,7 +3915,7 @@ function drawRemoteDyn(bt){
   if (Math.abs(R.x-P.x) > 1600 || Math.abs(R.y-P.y) > 1600) return;
   const L = R.look;
   if (R.inMech) rig(bt, R.x, R.y, R.face, {s:L.sc, body:L.m[0], dark:L.m[1], head:L.m[2], visor:L.A.Head || '#5fe0ff', light:'#7ee08a',
-    armor:L.A, kinds:L.K, zones:L.Zn, antenna:true, gun:{kind:L.K.Weapon, tier:L.wt, aim:R.aim, col:L.A.Weapon || '#5fe0ff', flash:R.shoot && Math.floor(clock*20)%2 === 0},
+    armor:L.A, tiers:L.T, kinds:L.K, zones:L.Zn, antenna:true, gun:{kind:L.K.Weapon, tier:L.wt, aim:R.aim, col:'#ff7a2a', flash:R.shoot && Math.floor(clock*20)%2 === 0},
     walk:R.fly ? 0 : R.walk, amp:R.fly ? 0 : R.amp, flying:R.fly, dashing:R.fly, swing:R.swing, hit:FOE.hitT > 0, lean:R.amp*0.5, recoil:R.shoot ? 0.5 : 0});
   else rig(bt, R.x, R.y, R.face, {s:PILOT_S, pilot:true, body:L.p[0], dark:L.p[1], head:L.p[2], pack:L.p[3], visor:L.p[4], accent:L.p[5], light:'#7ee08a',
     antenna:true, gun:{kind:'Pilot', col:'#5fe0ff'}, aimArm:R.shoot, walk:R.walk, amp:R.amp, hit:FOE.hitT > 0});
@@ -3909,7 +3932,7 @@ function drawFriendBaseDyn(bt){
     box(bt, sl.x+ox, sl.y, 3+bob, sz, sz, sz, 0, '#3b3f48'); box(bt, sl.x+ox, sl.y, 3+bob+sz*0.4, sz+1, sz*0.2, sz+1, 0, col, 1);
     if (ready) cyl(bt, sl.x+ox, sl.y, 3, 3, 120, 3, 0, col, 1); }
   const R = NET.R, L = R && R.look, M = B.mech;
-  if (L && M && !R.inMech) rig(bt, M.x, M.y, M.f, {s:L.sc, body:L.m[0], dark:L.m[1], head:L.m[2], visor:'#2a4a5a', armor:L.A, kinds:L.K, zones:L.Zn, show:ALLSHOW,
+  if (L && M && !R.inMech) rig(bt, M.x, M.y, M.f, {s:L.sc, body:L.m[0], dark:L.m[1], head:L.m[2], visor:'#2a4a5a', armor:L.A, tiers:L.T, kinds:L.K, zones:L.Zn, show:ALLSHOW,
     gun:{kind:L.K.Weapon, tier:L.wt, col:L.A.Weapon || '#5fe0ff'}, hit:M.st === 'repair' && Math.floor(clock*3)%2 === 0});
 }
 function netLabels(){
