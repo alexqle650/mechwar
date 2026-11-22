@@ -840,7 +840,7 @@ function makeEnemy(kind, tier, x, y, o){
   const hp = EN[tier].hp * Z_.hp * (o.hpm||1);
   const e = {kind, tier, size, x, y, r:9*sc, sc, hp, max:hp, dmg:EN[tier].d*Z_.d*(o.dm||1), spd:(kind==='wave'?88:72)*(size===4?0.7:1),
     fireT:rr(0.8,1.8), home:o.home||{x,y}, crate:o.crate||null, wave:o.wave||null, aggro:0, stuckT:0, strafeT:0, sd:1,
-    orbit: R()<0.5?1:-1, ang:0, walk:0, hitT:0, dead:false, slowT:0, zone:o.zone||tier};
+    orbit: R()<0.5?1:-1, ang:0, walk:0, hitT:0, dead:false, slowT:0, zone:o.zone||tier, born:clock};
   collide(e,false);
   enemies.push(e);
   burst(e.x,e.y, kind==='wave'?'#ffd23f':'#9be7ff', 12 + size*6, 120 + sc*20);
@@ -1837,7 +1837,7 @@ function fire(){
     bullets.push(Object.assign({x:m.x, y:m.y, h:m.h, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp, life, dmg:d, from:'p', col, r:3, crit}, extra||{})); };
   sfx(!P.inMech ? 'pilot' : {'Rail Cannon':'rail','Sniper':'rail','Scatter Gun':'scatter','Rocket Pod':'rocket','Mortar':'rocket','Tesla Coil':'tesla','Laser':'tesla','Blade':'swing','Spear':'swing','Claws':'swing','Hammer':'swing','Drill':'swing','Whip':'tesla','Flamethrower':'scatter','Boomerang':'swing','Grenade Launcher':'rocket'}[Wk] || 'shoot');
   if (MELEE.includes(Wk)){ startMelee(Wk, cs, dmgNow); return; }
-  P.flashT = clock + 0.06;
+  P.flashT = clock + 0.06; P.recoilK = 1;
   if (Wk === 'Rail Cannon'){ shot(P.aim, 950, 0.7, dmgNow*2.6, {pierce:new Set(), rail:true}); shake = Math.max(shake, 1); }
   else if (Wk === 'Sniper'){ shot(P.aim, 1500, 0.6, dmgNow*4.5, {rail:true, sniper:true}); shake = Math.max(shake, 1.4); }
   else if (Wk === 'Scatter Gun') for (let k=-2;k<=2;k++) shot(P.aim + k*0.09 + rr(-0.03,0.03), 540, 0.5, dmgNow*0.45);
@@ -2058,7 +2058,9 @@ function updatePlayer(dt){
   P.amp += ((P.moving ? 1 : 0) - P.amp) * Math.min(1, dt*10);
   if (P.inMech){
     const step = Math.floor(P.walk/Math.PI);
-    if (step !== lastStep && P.amp > 0.5){ lastStep = step; shake = 1.6; sfx('step'); burst(P.x + rx*(step%2?8:-8), P.y + ry*(step%2?8:-8), '#8a8070', 3, 40); }
+    if (step !== lastStep && P.amp > 0.5){ lastStep = step; shake = 1.6; sfx('step');
+      const zs = zoneAt(P.x,P.y), dc = zs ? shade(ZONES[zs-1].f1, 0.8) : '#b9ab8e', fx = P.x + rx*(step%2?8:-8)*mS()/1.45, fy = P.y + ry*(step%2?8:-8)*mS()/1.45;
+      burst(fx, fy, dc, 7, 60); ring(fx, fy, dc, 14*mS()/1.45); }
   }
   shake = Math.max(0, shake - dt*8);
   // aim: crosshair in shift lock / touch, otherwise the spot under the mouse; then snap to a nearby bot
@@ -2214,7 +2216,7 @@ void main(){
 const FS = `#version 300 es
 precision highp float;
 in vec3 vW; in vec3 vN; in vec3 vC; in vec3 vL; in vec3 vS; flat in float vM; flat in vec2 vYP;
-uniform int uKind;
+uniform int uKind; uniform float uTime;
 uniform vec3 uSun, uSunCol, uSky, uGround, uFog, uFogTop, uCam; uniform float uFogNear, uFogFar, uAmbK;
 uniform vec4 uL[12]; uniform vec3 uLC[12]; uniform int uNL;
 out vec4 o;
@@ -2273,7 +2275,8 @@ void main(){
     spec = 0.06; gloss = 10.0;
   }
   vec3 lit;
-  if (vM > 0.5 && vM < 1.5){ float fr = pow(1.0 - abs(dot(n, V)), 2.0); lit = col * (1.25 + fr*0.5) + vec3(fr*0.15); }   // glowing parts
+  if (vM > 0.5 && vM < 1.5){ float fr = pow(1.0 - abs(dot(n, V)), 2.0), pul = 1.0 + 0.1*sin(uTime*4.0 + (vW.x + vW.z)*0.05);
+    lit = (col * (1.25 + fr*0.5) + vec3(fr*0.15)) * pul; }   // glowing parts, gently pulsing
   else {
     vec3 amb = mix(uGround, uSky, n.y*0.5 + 0.5) * uAmbK;
     float nd = max(dot(n, uSun), 0.0);
@@ -2349,7 +2352,7 @@ function initGL(){
   gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
   gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
-  for (const n of ['uKind','uVP','uSun','uSunCol','uSky','uGround','uFog','uFogTop','uCam','uFogNear','uFogFar','uAmbK','uL','uLC','uNL']) U[n] = gl.getUniformLocation(prog, n);
+  for (const n of ['uTime','uKind','uVP','uSun','uSunCol','uSky','uGround','uFog','uFogTop','uCam','uFogNear','uFogFar','uAmbK','uL','uLC','uNL']) U[n] = gl.getUniformLocation(prog, n);
   for (const [k, data] of [['b', meshCube()], ['c', meshCyl(36)], ['s', meshSph(28, 18)]]){
     const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
     MESH[k] = {buf, count: data.length/6};
@@ -2628,8 +2631,13 @@ function rig(bt, x, z, yaw, o){
   const sw = hover ? 0 : Math.sin(ph)*0.62*amp, jet = sh.Legs && K.Legs === 'Jet Wings';
   const bob = hover ? 3 + Math.sin(clock*3)*0.9 : Math.abs(Math.cos(ph))*1.3*amp + (1-amp)*Math.sin(clock*2.2)*0.35;
   const at = (lx,lz) => [x + (lx*c - lz*sn)*s, z + (lx*sn + lz*c)*s];
-  const L0 = (o.lift||0)/s;
-  const part = (fn,lx,ly,lz,sx,sy,sz,col,mode,pitch) => { const [a,b] = at(lx,lz); fn(bt,a,b,(ly+L0)*s,sx*s,sy*s,sz*s,yaw,col,mode,pitch); };
+  const L0 = (o.lift||0)/s, HIP = 10;
+  // the upper body leans into movement (and back from recoil) and sways side to side with each step
+  const lean = o.lean || 0, swayZ = Math.sin(ph)*0.55*amp*(o.pilot ? 0.5 : 1);
+  const part = (fn,lx,ly,lz,sx,sy,sz,col,mode,pitch) => {
+    if (o.ghost){ col = o.ghost; mode = 5; }
+    const k = ly > HIP ? ly - HIP : 0, [a,b] = at(lx + lean*k*0.09, lz + swayZ*k*0.05);
+    fn(bt,a,b,(ly+L0)*s,sx*s,sy*s,sz*s,yaw,col,mode,pitch); };
   const ZN = o.zones || {};
   // every zone's parts carry that zone's look: rust, vines, sand fins, ice, chrome neon, flames, void orbs, stars
   const deco = (sl, lx, ly, lz, k) => {
@@ -2673,9 +2681,11 @@ function rig(bt, x, z, yaw, o){
       for (const [lz,pp] of [[-3.2,sw],[3.2,-sw]]){
         part(cyl,0,0.8,lz,lw,9.4,lw,o.dark,0,pp);
         const fx = Math.sin(pp)*9.4, fy = 10.2 - Math.cos(pp)*9.4;
-        part(box,0.9+fx,Math.max(0,fy-1),lz,6.6,o.pilot?2.6:1.9,5,o.pilot ? o.pack : shade(o.dark,0.8));
+        if (o.pilot) part(box,0.9+fx,Math.max(0,fy-1),lz,6.6,2.6,5,o.pack);
+        else { part(box,1.2+fx,Math.max(0,fy-1),lz,8.6,2.4,5.8,shade(o.dark,0.8)); part(box,4.6+fx,Math.max(0,fy-1),lz,2,1.6,5,shade(o.body,0.9),0,-0.3); }
         if (o.pilot){ const kx = Math.sin(pp)*4.8, ky = 10.2 - Math.cos(pp)*4.8; part(sph,kx+1.7,ky-1.6,lz,2.8,2.8,2.8,shade(o.body,1.15)); }
-        if (A.Legs) part(box,1.8,2.7,lz,1.8,7.5,lw+0.7,A.Legs,0,pp);
+        if (A.Legs || !o.pilot) part(box,1.8,2.7,lz,2,7.5,lw+0.9,A.Legs || shade(o.body,1.04),0,pp);
+        if (!o.pilot) part(box,2.6,6.6,lz,2.6,2.6,lw+1.2,shade(A.Legs || o.body,1.2),0,pp);   // knee guard
         if (K.Legs === 'Piston Legs') part(cyl,2.9,1.5,lz,1.3,7.7,1.3,'#b7c0cf',0,pp);
         if (K.Legs === 'Thruster Legs' || jet){ const tx = Math.sin(pp)*5 - 2.6, tyy = 10.2 - Math.cos(pp)*5 - 2; part(cyl,tx,tyy,lz,2.6,3.6,2.6,'#2a2e36'); part(sph,tx,tyy-1.2,lz,2,2,2,o.dashing?'#ffd23f':'#ff7a2a',1); if (o.dashing) part(sph,tx-1,tyy-6,lz,2.6,6,2.6,'#ffb347',1); }
         part(sph,0,8.4,lz,4.8,4.8,4.8,shade(o.dark,1.25));
@@ -2689,11 +2699,21 @@ function rig(bt, x, z, yaw, o){
       part(box,0.5,ty+7.6,0,7.6,2.4,10,shade(o.body,1.15)); part(box,4.3,ty+3.6,0,0.6,2.8,2.8,o.accent,1); part(cyl,0,ty+9.6,0,5.4,1.4,5.4,o.dark);
       part(box,4.3,ty+3.6,-3.4,0.5,4.6,0.8,shade(o.body,0.7)); part(box,4.3,ty+3.6,3.4,0.5,4.6,0.8,shade(o.body,0.7));
     }
-    else { part(cyl,0,ty-0.8,0,7.5,2,11.5,o.dark); part(sph,0,ty-0.4,0,9.4,12.6,13.6,o.body); part(sph,0.4,ty+4.4,0,9.6,8.4,15,o.body); part(cyl,0,ty+3.8,0,9.8,1.2,14.6,shade(o.body,0.8));
-      part(sph,3.2,ty+5.6,0,4,4.4,9.4,shade(o.body,1.12)); }
+    else { const bd = o.body, dk = o.dark, gl = o.light || '#5fe0ff';
+      part(box,0,ty-1.4,0,6.4,3.2,8.4,dk);                          // waist
+      part(box,-0.4,ty+1.2,0,8.6,6,11.6,bd);                        // lower chest
+      part(box,0.4,ty+6.2,0,10.6,6.6,15.6,bd);                      // wide upper chest
+      part(box,4.9,ty+4.4,0,2.6,6.4,10.8,shade(bd,1.16),0,-0.32);  // sloped front armour
+      part(box,-1,ty+12.4,0,7.2,1.6,9.4,dk);                        // collar
+      part(box,6.4,ty+3.3,0,0.5,0.9,6.4,gl,1);                      // chest light strip
+      for (const sd of [-1,1]){ part(box,0.6,ty+2.6,sd*5.9,5.4,0.7,0.5,gl,1); part(box,0.6,ty+4,sd*5.9,5.4,0.7,0.5,gl,1); }   // side vents
+      if (!jet) for (const sd of [-1,1]){                           // back boosters
+        part(box,-6.6,ty+5.4,sd*3.8,3.6,7.4,3.4,dk); part(box,-8.6,ty+3.4,sd*3.8,1.6,2.6,2.6,'#2a2e36');
+        const fl = o.dashing ? 1 : 0.25 + amp*0.25;
+        part(sph,-9.6-fl*2,ty+3.6,sd*3.8,(1.4+fl*2.6),(1.2+fl*0.8),(1.2+fl*0.8),o.dashing ? '#ffb347' : gl,1); } }
     if (A.Torso){
       const th = K.Torso === 'Hull Plate' ? 2.8 : 1.5;
-      part(sph,3.2+th/2,ty+1.2,0,th*2.4,9.6,12.4,A.Torso); part(sph,4.6+th,ty+4.6,0,1.2,5,6,shade(A.Torso,1.25),1); part(sph,-4.2,ty+0.6,0,6,10,10,shade(A.Torso,0.6));
+      part(box,5.6+th/2,ty+2,0,th,7.4,11.6,A.Torso,0,-0.28); part(box,6.6+th,ty+6.6,0,0.6,1.6,7,shade(A.Torso,1.35),1); part(box,-4.4,ty+1.4,0,3.4,8.6,10.8,shade(A.Torso,0.7));
       deco('Torso',-5,ty+11,-4.4,0.9); deco('Torso',-5,ty+11,4.4,0.9);
       part(cyl,-7.8,ty-1.6,-2.6,2.2,2.6,2.2,A.Torso,1); part(cyl,-7.8,ty-1.6,2.6,2.2,2.6,2.2,A.Torso,1);
       if (K.Torso === 'Drone Bay'){ part(box,-7.4,ty+4,0,3,7,10,shade(A.Torso,0.8)); part(sph,-9,ty+9,0,4,3,4,'#e8eef7'); }
@@ -2720,7 +2740,10 @@ function rig(bt, x, z, yaw, o){
       part(sph,hx,hy-2,lz,4,4,4,o.pilot ? o.pack : shade(o.dark,1.3));
       if (K.Arms === 'Grip Arms'){ part(box,hx+1.6,hy-3.4,lz-1.3,3,1.2,1,A.Arms||'#9aa3b2'); part(box,hx+1.6,hy-3.4,lz+1.3,3,1.2,1,A.Arms||'#9aa3b2'); }
       if (K.Arms === 'Hydraulic Arms') part(cyl,0,sy-7.5,lz+(lz>0?2.6:-2.6),1.2,7,1.2,'#b7c0cf',0,pp);
-      if (A.Arms){ part(sph,0,sy-3.2,lz,8.6,7.2,8.6,A.Arms); part(cyl,0,sy-1.6,lz+(lz>0?0.8:-0.8),8.8,1,8.8,shade(A.Arms,0.7)); deco('Arms',0,sy+3.6,lz+(lz>0?1:-1),0.9); }
+      if (!o.pilot){ const pc = A.Arms || shade(o.body,1.08), ld = lz > 0 ? 1 : -1;
+        part(box,0.2,sy-1.6,lz+ld*0.8,10.4,5.6,6.6,pc); part(box,0.2,sy+4,lz+ld*1.4,9,1.2,4.6,shade(pc,1.22)); part(box,-0.6,sy-1,lz+ld*4.2,8,4.2,0.8,shade(pc,0.75));
+        part(box,5.4,sy+0.4,lz+ld*0.8,0.5,1,5,o.light || '#5fe0ff',1); }
+      if (A.Arms) deco('Arms',0,sy+5.4,lz+(lz>0?1:-1),0.9);
       if (K.Arms === 'Drone Arms') { part(cyl,0,sy+2,lz,10,0.6,10,'#5a6070'); part(box,0,sy+2.5,lz,11,0.4,1.4,'#c9d2e0',0,Math.sin(clock*25)); };
       if (K.Arms === 'Rage Arms') part(box,0,sy-6,lz,4,1.2,4,'#ff3b3b',1);
       if (K.Arms === 'Repair Arms'){ part(box,0,sy+0.2,lz,1.2,3.6,3.6,'#7ee08a',1); part(box,0,sy+0.2,lz,1.4,1.2,3.8,'#7ee08a',1); }
@@ -2785,17 +2808,25 @@ function rig(bt, x, z, yaw, o){
       part(cyl,0,ty+11.4,-4.9,3,3.2,1.6,o.dark); part(cyl,0,ty+11.4,4.9,3,3.2,1.6,o.dark);
       part(sph,0,ty+12.4,-5.6,1.4,1.4,1.4,o.accent,1); part(sph,0,ty+12.4,5.6,1.4,1.4,1.4,o.accent,1);
     } else {
-      part(cyl,0,ty+10.6,0,9,6.4,9,o.head); part(sph,0,ty+13,0,9.2,7.6,9.2,o.head); part(cyl,0,ty+10.2,0,9.6,1.2,9.6,shade(o.head,0.75)); part(cyl,0,ty+9.6,0,5,1.2,5,o.dark);
+      const hc = o.head;
+      part(box,0,ty+11,0,4.4,1.6,4.4,o.dark);                               // neck
+      part(box,-0.4,ty+12.4,0,7.8,4.2,7.2,hc);                              // head block
+      part(box,2.8,ty+12.8,0,4,3.4,6.4,shade(hc,1.14),0,-0.34);            // sloped face
+      part(box,-1.4,ty+16.4,0,6,1,5.4,shade(hc,0.8));                       // brow
+      for (const sd of [-1,1]) part(box,-2.8,ty+14.4,sd*3.9,5.2,1.1,0.6,shade(hc,0.7),0,0.28);   // fins
       const hk = K.Head;
-      if (hk === 'Visor Unit' || hk === 'Crown Visor') part(box,4.4,ty+13,0,1.2,3.2,8.6,o.visor,1);
-      else if (hk === 'Optic Helm') part(sph,4.2,ty+12.6,0,3.4,3.4,3.4,o.visor,1);
-      else part(box,4.4,ty+13,0,1,2,6,o.visor,1);
+      if (hk === 'Visor Unit' || hk === 'Crown Visor') part(box,4.8,ty+14,0,0.7,1.6,6.6,o.visor,1);
+      else if (hk === 'Optic Helm') part(sph,4.4,ty+13.4,0,2.8,2.8,2.8,o.visor,1);
+      else part(box,4.8,ty+14.2,0,0.6,0.9,5.4,o.visor,1);
       if (A.Head){
         if (hk === 'Sensor Dome'){ part(sph,0,ty+17,0,7,6,7,A.Head,1); part(box,0,ty+17.6,0,9.6,1.4,9.6,shade(A.Head,0.7)); }
         else if (hk === 'Crown Visor'){ part(cyl,0,ty+18,0,9.6,2,9.6,'#ffd23f'); for (const [a,b] of [[-3.6,-3.6],[3.6,-3.6],[-3.6,3.6],[3.6,3.6],[0,0]]) part(box,a,ty+20.4,b,1.6,a===0?4:2.6,1.6,'#ffd23f',1); }
-        else if (hk === 'Lucky Helm'){ part(sph,-0.4,ty+15.6,0,10,6,10.2,A.Head); for (const [a,b] of [[1.6,0],[-1.6,0],[0,1.6],[0,-1.6]]) part(sph,a,ty+21,b,3,2,3,'#5fd35f',1); }
-        else if (hk === 'Battle Helm'){ part(sph,-0.4,ty+15.6,0,10,6,10.2,A.Head); part(box,0,ty+19,-5.5,2,6,2,'#e8eef7',0,0.5); part(box,0,ty+19,5.5,2,6,2,'#e8eef7',0,0.5); part(box,4.6,ty+11,0,1,6,4,A.Head); }
-        else { part(sph,-0.4,ty+15.6,0,10,6,10.2,A.Head); for (const sd of [-5,5]) part(sph,0,ty+11,sd,6,6,1.6,shade(A.Head,0.7)); }
+        else {   // angular armoured helmet: cap, sloped brow, cheek plates
+          part(box,-0.8,ty+15.2,0,8.6,2.6,8,A.Head); part(box,2.6,ty+15.4,0,3.2,1.8,7.4,shade(A.Head,1.22),0,-0.34);
+          for (const sd of [-1,1]) part(box,0.6,ty+12.4,sd*4,6,3.4,0.8,shade(A.Head,0.72));
+          if (hk === 'Lucky Helm') part(box,-1,ty+18.4,0,1.2,2.2,1.2,'#5fd35f',1);
+          if (hk === 'Battle Helm') for (const sd of [-1,1]) part(box,-1.6,ty+17.6,sd*3.6,1.6,5,1.2,'#e8eef7',0,0.55);
+        }
       }
     }
     if (!o.pilot && A.Head) deco('Head',-0.6,ty+21.2,0,1);
@@ -2809,12 +2840,12 @@ function rig(bt, x, z, yaw, o){
       if (o.aimArm){ const [a,b] = at(8.6,8.4); gunModel(bt, a, b, (ty+7)*s, yaw, 'Pilot', g.col, s, 1); }
       else part(cyl,0,ty-2,10.8,2.2,7,2.2,'#2a2e36');
     } else {
-      const ca = g.aim === undefined ? yaw : g.aim, [ax,az] = at(1, 8.4 + 2.5);
+      const gk = ty + 5 - HIP, ca = g.aim === undefined ? yaw : g.aim, [ax,az] = at(1 + lean*gk*0.09 - (o.recoil||0)*3.2, 10.9 + swayZ*gk*0.05);
       if (!MELEE.includes(g.kind)) gunModel(bt, ax, az, (ty+5+L0)*s, ca, g.kind || 'Blaster', g.col, s, g.tier||1, g.flash);
     }
   }
   if (o.shield) sph(ALPHA, x, z, -2*s, 40*s, 44*s, 40*s, 0, '#5fe0ff', 5);
-  if (o.hit) part(box,0,9,0,9.4,14,14,'#ffffff',1);
+  if (o.hit && !o.ghost) sph(ALPHA, x, z, 0, (o.pilot ? 15 : 26)*s, (o.pilot ? 26 : 36)*s, (o.pilot ? 15 : 26)*s, 0, '#ffffff', 5);
 }
 function partModel(bt, x, z, base, p, yaw, k){
   const slot = p.slot, col = TIERS[p.tier].c, kind = kindOf(p), c = Math.cos(yaw), sn = Math.sin(yaw);
@@ -2871,16 +2902,20 @@ function drawPlayerDyn(bt){
       hit: MECH.state === 'repair' && Math.floor(clock*3)%2 === 0});
   }
   if (P.dead) return;
-  const hit = P.hurtT > 0 && Math.floor(P.hurtT*30)%2 === 0;
+  const hit = P.hurtT > 0 && Math.floor(P.hurtT*30)%2 === 0, leanP = P.amp*0.5 + (P.dashT > 0 ? 1.5 : 0) - (P.recoilK||0)*0.9;
+  for (const g of GHOSTS){ const gc = shade(P.inMech ? '#5fe0ff' : '#9be7ff', 0.4 + g.life*2);
+    if (g.mech) rig(ALPHA, g.x, g.y, g.face, {s:mS(), body:'#000000', dark:'#000000', head:'#000000', visor:'#000000', armor:L.A, kinds:L.K, zones:{}, show:ALLSHOW, ghost:gc, noShadow:true, walk:g.walk, amp:g.amp, lean:1.5});
+    else rig(ALPHA, g.x, g.y, g.face, {s:PILOT_S, pilot:true, body:'#000', dark:'#000', head:'#000', pack:'#000', visor:'#000', accent:'#000', ghost:gc, noShadow:true, walk:g.walk, amp:g.amp, lean:1.5}); }
   if (P.inMech){
     const SM = skin().m;
     rig(bt, P.x, P.y, P.face, {s:mS(), body:SM[0], dark:SM[1], head:SM[2], visor: L.A.Head || '#5fe0ff', light:'#5fe0ff',
       armor:L.A, kinds:L.K, zones:L.Zn, antenna:true, gun:{kind:L.K.Weapon, tier:L.wt, aim:P.aim, col:L.A.Weapon||'#5fe0ff', flash: clock < (P.flashT||0)},
-      walk:P.fly ? 0 : P.walk, amp:P.fly ? 0 : P.amp, lift:P.lift||0, flying:P.fly, hit, dashing: P.dashT > 0 || P.fly, swing: P.swingT > 0 ? P.swingT/P.swingMax : 0, shield: (P.shieldHitT > 0 || P.odT > 0) && P.shield > 0});
+      walk:P.fly ? 0 : P.walk, amp:P.fly ? 0 : P.amp, lift:P.lift||0, flying:P.fly, hit, dashing: P.dashT > 0 || P.fly, swing: P.swingT > 0 ? P.swingT/P.swingMax : 0, shield: (P.shieldHitT > 0 || P.odT > 0) && P.shield > 0,
+      lean:leanP, recoil:P.recoilK||0});
   } else {
     const SP = skin().p;
     rig(bt, P.x, P.y, P.face, {s:PILOT_S, pilot:true, body:SP[0], dark:SP[1], head:SP[2], pack:SP[3], visor:SP[4], accent:SP[5], light:SP[5],
-      antenna:true, gun:{kind:'Pilot', col:'#5fe0ff'}, aimArm: P.shootT > 0, walk:P.walk, amp:P.amp, hit});
+      antenna:true, gun:{kind:'Pilot', col:'#5fe0ff'}, aimArm: P.shootT > 0, walk:P.walk, amp:P.amp, hit, lean:leanP});
   }
 }
 const ENEMY_GUN = {guard:'Blaster', wave:'Scatter Gun', rival:'Rocket Pod', boss:'Rail Cannon', chaser:'Blaster'};
@@ -2896,6 +2931,13 @@ const CREATURE = [null,
   {n:'Star Walker', body:'#dfe2f2', dark:'#4a4f78', glow:'#ff9df5'}];
 function drawEnemyDyn(bt, e){
   if (Math.abs(e.x-P.x) > 1000 || Math.abs(e.y-P.y) > 1000) return;
+  // warp in over 0.4s (a little overshoot), and pop slightly when hit
+  const age = clock - (e.born ?? -9), k = age >= 0.4 ? 1 : Math.max(0.05, Math.sin(Math.min(1, age/0.4)*Math.PI*0.6)/Math.sin(Math.PI*0.6)), pop = 1 + Math.max(0, e.hitT)*1.1;
+  if (age < 0.6){ const f = 1 - age/0.6; cyl(ALPHA, e.x, e.y, 0, 34*e.sc*f + 6, 160*f, 34*e.sc*f + 6, 0, e.kind === 'wave' ? '#ffd23f' : '#9be7ff', 5); }
+  const sc0 = e.sc; e.sc = sc0*k*pop;
+  try { drawEnemyBody(bt, e); } finally { e.sc = sc0; }
+}
+function drawEnemyBody(bt, e){
   const boss = e.kind === 'boss', zone = e.zone || e.tier || 1;
   if (boss){ cyl(ALPHA, e.x, e.y, 0.3, 60*e.sc, 1, 60*e.sc, 0, e.warn > 0 ? '#ff3b3b' : ZONES[zone-1].acc, 5); }
   if (e.elite || e.mini){ const pul = 1 + Math.sin(clock*5)*0.08; cyl(ALPHA, e.x, e.y, 0.4, e.r*2.8*pul, 1, e.r*2.8*pul, 0, e.mini ? '#ff9a2e' : '#ffd23f', 5); sph(bt, e.x, e.y, (e.mini ? 46 : 38)*e.sc, 5*e.sc, 5*e.sc, 5*e.sc, clock*3, e.mini ? '#ff9a2e' : '#ffd23f', 1); }
@@ -2903,7 +2945,7 @@ function drawEnemyDyn(bt, e){
   const body = boss ? mix('#2a2d36', ZONES[zone-1].acc, e.hp < e.max/2 ? 0.45 : 0.25) : e.kind==='chaser' ? '#5a2048' : e.kind==='wave' ? '#7a6628' : mix('#7a5a40','#55596a',0.5);
   const eye = boss ? '#ff3b3b' : e.kind==='chaser' ? '#ff4fd0' : e.kind==='wave' ? '#ffd23f' : '#ffb347';
   rig(bt, e.x, e.y, e.ang, {s:e.sc, body, dark:'#262a31', head:shade(body,1.15), visor:eye, light:eye, kinds:{Head:'Optic Helm'},
-    gun:{kind:ENEMY_GUN[e.kind], aim:e.ang, col:eye, tier:1}, walk:e.walk, amp:e.amp||0, spikes:boss, stripes:e.kind==='wave', hit:e.hitT > 0, antenna:boss, armor: boss ? {Arms:ZONES[zone-1].acc, Torso:ZONES[zone-1].acc, Legs:shade(ZONES[zone-1].acc,0.7)} : undefined});
+    gun:{kind:ENEMY_GUN[e.kind], aim:e.ang, col:eye, tier:1}, walk:e.walk, amp:e.amp||0, lean:(e.amp||0)*0.45, spikes:boss, stripes:e.kind==='wave', hit:e.hitT > 0, antenna:boss, armor: boss ? {Arms:ZONES[zone-1].acc, Torso:ZONES[zone-1].acc, Legs:shade(ZONES[zone-1].acc,0.7)} : undefined});
 }
 function drawCreature(bt, e, zone, boss){
   const s = e.sc, a = e.ang, C = Math.cos(a), Sn = Math.sin(a), x = e.x, z = e.y;
@@ -3096,7 +3138,7 @@ function buildDynamic(){
   for (const c of crates) if (Math.abs(c.x-P.x) < 1100 && Math.abs(c.y-P.y) < 1100) drawCrateDyn(bt, c);
   for (const e of enemies) drawEnemyDyn(bt, e);
   drawPlayerDyn(bt);
-  drawRemoteDyn(bt); drawFriendBaseDyn(bt);
+  drawRemoteDyn(bt); drawFriendBaseDyn(bt); drawMotes(bt);
   // treadmill belts
   if (P.y > 900) for (const t of TREADS) for (let k=0;k<6;k++){ const zz = t.y - 48 + ((k*16 + clock*70) % 96); box(bt, t.x, zz, 6.1, 40, 0.4, 3, 0, '#1a1c22'); }
   // portals (zone side and arena exits)
@@ -3219,7 +3261,7 @@ function render3D(){
   gl.viewport(0,0,cv.width,cv.height);
   gl.clearColor(horizon[0], horizon[1], horizon[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.useProgram(prog);
-  gl.uniformMatrix4fv(U.uVP, false, new Float32Array(VP));
+  gl.uniformMatrix4fv(U.uVP, false, new Float32Array(VP)); gl.uniform1f(U.uTime, clock);
   const sd = [0.45, 0.62, 0.35], sl = Math.hypot(...sd);
   gl.uniform3f(U.uSun, sd[0]/sl, sd[1]/sl, sd[2]/sl);
   let sunC = mixA([1.0,0.96,0.88].map(v=>v*1.08), [0.3,0.34,0.6], nightK); if (dusk) sunC = mixA(sunC, [1.0,0.62,0.4], 0.5*dusk);
@@ -3232,10 +3274,11 @@ function render3D(){
   const Ls = [], LC = [];
   Ls.push(P.x, P.inMech ? 50 : 30, P.y, vis ? 420 : 240); LC.push(...[1,0.92,0.75].map(v => v*(0.12+nightK*1.1)));
   if (nightK > 0.05){
-    const near = lamps.filter(l => Math.abs(l.x-P.x) < 700 && Math.abs(l.y-P.y) < 700).sort((a,b) => Math.hypot(a.x-P.x,a.y-P.y) - Math.hypot(b.x-P.x,b.y-P.y)).slice(0,7);
+    const near = lamps.filter(l => Math.abs(l.x-P.x) < 700 && Math.abs(l.y-P.y) < 700).sort((a,b) => Math.hypot(a.x-P.x,a.y-P.y) - Math.hypot(b.x-P.x,b.y-P.y)).slice(0,6);
     for (const l of near){ Ls.push(l.x+4, 38, l.y+4, 190); LC.push(...rgb(l.col).map(v => v*nightK*1.3)); }
   }
-  const nc = crates.slice().sort((a,b) => Math.hypot(a.x-P.x,a.y-P.y) - Math.hypot(b.x-P.x,b.y-P.y)).slice(0,4);
+  if (clock < (P.flashT||0) + 0.03 && !P.dead){ const m = muzzle(); Ls.push(m.x, m.h + 4, m.y, P.inMech ? 170 : 90); LC.push(1.0, 0.72, 0.38); }
+  const nc = crates.slice().sort((a,b) => Math.hypot(a.x-P.x,a.y-P.y) - Math.hypot(b.x-P.x,b.y-P.y)).slice(0, 12 - Ls.length/4);
   for (const c of nc){ Ls.push(c.x, 20, c.y, 110); LC.push(...rgb(TIERS[c.tier].c).map(v => v*(0.3+0.6*nightK))); }
   const nL = Ls.length/4, La = new Float32Array(48), LCa = new Float32Array(36);
   La.set(Ls); LCa.set(LC);
@@ -3349,6 +3392,30 @@ function drawMinimap(){
   text('Z'+zi+' '+zn.n.toUpperCase(), mx+S2/2, my+S2+2, zn.acc, 8, 'center');
 }
 let VIGNETTE = null;
+// ---------- animation helpers ----------
+const GHOSTS = []; let ghostT = 0;
+function animTick(dt){
+  P.recoilK = Math.max(0, (P.recoilK||0) - dt*9);
+  for (const g of GHOSTS) g.life -= dt;
+  while (GHOSTS.length && GHOSTS[0].life <= 0) GHOSTS.shift();
+  ghostT -= dt;
+  if (!P.dead && (P.dashT > 0 || (P.fly && P.amp > 0.3)) && ghostT <= 0){
+    ghostT = 0.04; GHOSTS.push({x:P.x, y:P.y, face:P.face, walk:P.walk, amp:P.amp, mech:P.inMech, life:0.28});
+    if (GHOSTS.length > 6) GHOSTS.shift(); }
+}
+function drawMotes(bt){
+  const night = isNight || nightK > 0.3, zi = zoneAt(P.x,P.y), acc = zi ? ZONES[zi-1].acc : '#ffffff', C = 90;
+  if (!night && !zi) return;                      // fireflies at night; a few floating specks out in the zones by day
+  const cx0 = Math.floor(P.x/C), cy0 = Math.floor(P.y/C);
+  for (let i=-5;i<=5;i++) for (let j=-5;j<=5;j++){
+    const gx = cx0+i, gy = cy0+j, h = hash(gx, gy); if (h > (night ? 0.42 : 0.1)) continue;
+    const h2 = hash(gy*7+3, gx*13+1), t = clock*(0.3 + h2*0.4) + h*40;
+    const x = (gx + hash(gx*3+1, gy))*C + Math.sin(t)*16, y = (gy + hash(gx, gy*5+2))*C + Math.cos(t*0.8)*16;
+    const hh = 12 + h2*55 + Math.sin(t*1.7)*6, sz = night ? 1.0 + Math.sin(t*3 + h*9)*0.45 : 0.7;
+    if (Math.hypot(x - EYE[0], y - EYE[2]) < 90) continue;   // never right in front of the camera
+    sph(bt, x, y, hh, sz, sz, sz, 0, night ? (h2 > 0.5 ? '#d8ff7a' : '#fff3a0') : (h2 > 0.6 ? acc : '#ffffff'), 1);
+  }
+}
 function drawHUD(){
   ctx.setTransform(2,0,0,2,0,0);
   ctx.clearRect(0,0,W,H);
@@ -3689,7 +3756,7 @@ function drawRemoteDyn(bt){
   const L = R.look;
   if (R.inMech) rig(bt, R.x, R.y, R.face, {s:L.sc, body:L.m[0], dark:L.m[1], head:L.m[2], visor:L.A.Head || '#5fe0ff', light:'#7ee08a',
     armor:L.A, kinds:L.K, zones:L.Zn, antenna:true, gun:{kind:L.K.Weapon, tier:L.wt, aim:R.aim, col:L.A.Weapon || '#5fe0ff', flash:R.shoot && Math.floor(clock*20)%2 === 0},
-    walk:R.fly ? 0 : R.walk, amp:R.fly ? 0 : R.amp, flying:R.fly, dashing:R.fly, swing:R.swing, hit:FOE.hitT > 0});
+    walk:R.fly ? 0 : R.walk, amp:R.fly ? 0 : R.amp, flying:R.fly, dashing:R.fly, swing:R.swing, hit:FOE.hitT > 0, lean:R.amp*0.5, recoil:R.shoot ? 0.5 : 0});
   else rig(bt, R.x, R.y, R.face, {s:PILOT_S, pilot:true, body:L.p[0], dark:L.p[1], head:L.p[2], pack:L.p[3], visor:L.p[4], accent:L.p[5], light:'#7ee08a',
     antenna:true, gun:{kind:'Pilot', col:'#5fe0ff'}, aimArm:R.shoot, walk:R.walk, amp:R.amp, hit:FOE.hitT > 0});
 }
@@ -3818,7 +3885,7 @@ function frame(now){
   flashT = Math.max(0, flashT - dt);
   hitMark = hitMark > 0 ? Math.max(0, hitMark - dt) : hitMark < 0 ? Math.min(0, hitMark + dt) : 0;
   dmgFlash = Math.max(0, dmgFlash - dt*1.5); missionFlash = Math.max(0, missionFlash - dt);
-  netTick(dt);
+  netTick(dt); if (!paused()) animTick(dt);
   render3D();
   drawHUD();
   chipT -= dt;
