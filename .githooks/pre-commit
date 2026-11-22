@@ -1,0 +1,6 @@
+#!/bin/sh
+# Block commits that look like they contain API keys or tokens.
+PAT='(sk-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|(api[_-]?key|secret|token|password)["'\'' ]*[:=] *["'\''][A-Za-z0-9_\-]{16,})'
+if git diff --cached -U0 | grep '^+' | grep -E -i -q "$PAT"; then
+  echo "pre-commit: possible secret found in staged changes. Commit blocked."; exit 1
+fi

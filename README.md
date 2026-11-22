@@ -9,3 +9,6 @@ Open `index.html` in a browser to play. Progress saves in the browser's localSto
 - Q pulse blast, Space leg ability, E open crate / buy off the belt
 - R get in or out of your mech, B workshop, I index, K skins, U upgrades, M sound
 - F / G / H fight, flee or send a crate to the yard
+
+## Contributing
+See `AGENTS.md` for repo rules, especially: never commit API keys or other secrets. After cloning, run `git config core.hooksPath .githooks` to turn on the secret check.
