@@ -2727,7 +2727,7 @@ function rig(bt, x, z, yaw, o){
   // ----- mechs: long legs with real knees (the lower foot always touches the ground), tall chest, small head -----
   const mech = !o.pilot, biped = mech && sh.Legs && !hover && K.Legs !== 'Tank Treads' && K.Legs !== 'Spider Legs';
   const G = o.glow || o.light || '#ff7a2a', dk = o.dark;
-  const plate = () => o.body;                                 // armour is gunmetal at every rarity
+  const plate = sl => A[sl] ? mix(o.body, A[sl], 0.2) : o.body;   // gunmetal with a light rarity tint
   const TT = o.tiers || {}, tr = sl => TT[sl] || (A[sl] ? 3 : 2);   // the rarity shows as more armour and detail
   const LEG1 = 8.2, LEG2 = 8.8, FOOT = 1.7, LEGS = [];
   if (biped) for (const [lz, pp, phl] of [[-3.9, sw, ph], [3.9, -sw, ph + Math.PI]]){
@@ -2963,7 +2963,7 @@ function rig(bt, x, z, yaw, o){
       part(cyl,0,ty+11.4,-4.9,3,3.2,1.6,o.dark); part(cyl,0,ty+11.4,4.9,3,3.2,1.6,o.dark);
       part(sph,0,ty+12.4,-5.6,1.4,1.4,1.4,o.accent,1); part(sph,0,ty+12.4,5.6,1.4,1.4,1.4,o.accent,1);
     } else {
-      const hc = o.head, hk = K.Head, hb = ty + 15.4, t = tr('Head');
+      const hc = A.Head ? mix(o.head, A.Head, 0.2) : o.head, hk = K.Head, hb = ty + 15.4, t = tr('Head');
       part(cyl,0,ty+14.4,0,3.4,1.6,3.4,dk);                                   // neck
       part(sph,-0.6,hb,0,7.4,6.8,6.8,hc);                                     // helmet shell
       if (t >= 3) part(box,-1.2,hb+4.6,0,5.6,2.2,5.8,shade(hc,1.12),0,0.12);   // crown plate
@@ -3004,7 +3004,7 @@ function rig(bt, x, z, yaw, o){
 function fn_pip(bt, x, z, h, k, col){ box(bt, x, z, Math.max(0, h), 1.4*k, 1.4*k, 1.4*k, 0, col, 1); }
 function partModel(bt, x, z, base, p, yaw, k){
   k = k*(0.82 + p.tier*0.045);   // higher rarity: a bigger part (shown by shape and size, not colour)
-  const slot = p.slot, col = '#ff7a2a', plate = '#5d646f', kind = kindOf(p), c = Math.cos(yaw), sn = Math.sin(yaw);
+  const slot = p.slot, col = '#ff7a2a', plate = mix('#5d646f', TIERS[p.tier].c, 0.25), kind = kindOf(p), c = Math.cos(yaw), sn = Math.sin(yaw);
   const pt = (fn,lx,ly,lz,sx,sy,sz,cl,m) => fn(bt, x + (lx*c - lz*sn)*k, z + (lx*sn + lz*c)*k, base + ly*k, sx*k, sy*k, sz*k, yaw, cl, m);
   const steel = '#4b525c', dark = '#1f2329';
   if (slot === 'Head'){
