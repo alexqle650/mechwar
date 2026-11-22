@@ -3119,7 +3119,7 @@ function partModel(bt, x, z, base, p, yaw, k){
   // armour parts are shown exactly as they look on a mech: their rarity's own design
   const kd = kindOf(p);
   if (['Head','Torso','Arms','Legs'].includes(p.slot) && !(p.slot === 'Legs' && ['Hover Legs','Tank Treads','Spider Legs','Jet Wings'].includes(kd))){
-    const sl = p.slot, sc = k*1.05, low = {Legs:0, Torso:11.4, Arms:13.4, Head:30.4}[sl];
+    const sl = p.slot, sc = k*1.4, low = {Legs:0, Torso:11.4, Arms:13.4, Head:30.4}[sl];
     rig(bt, x, z, yaw, {s:sc, body:'#4b525c', dark:'#1f2329', head:'#59616c', visor:'#ff8a3a', light:'#ff7a2a', show:{[sl]:true},
       armor:{[sl]:TIERS[p.tier].c}, tiers:{[sl]:p.tier}, kinds:{[sl]:kd}, zones:{[sl]:p.area || 1}, noShadow:true, lift:base - low*sc});
     return;
