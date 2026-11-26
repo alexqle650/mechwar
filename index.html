@@ -292,7 +292,7 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
           </div>
         </div>
         <p class="label" style="margin-top:12px">Controls</p>
-        <p class="body" style="font-size:.85rem;margin:0;line-height:1.5">Move WASD · Aim with the mouse · Shoot: click or hold · Zoom: wheel · Turn camera: right-drag, Z / C · Q pulse · Space jump · X dodge or leg ability · E buy, open, steal · R get in or out of your mech · B workshop · I index · K skins · U upgrades · L lock your base · P multiplayer · M sound · N world map · F / G / H fight, flee or yard a crate · Esc pause</p>
+        <p class="body" style="font-size:.85rem;margin:0;line-height:1.5">Move WASD · Aim with the mouse · Shoot: click or hold · Zoom: wheel · Turn camera: right-drag, Z / C · Q pulse · Space jump · X dodge or leg ability · T equip a better drop · E buy, open, steal · R get in or out of your mech · B workshop · I index · K skins · U upgrades · L lock your base · P multiplayer · M sound · N world map · F / G / H fight, flee or yard a crate · Esc pause</p>
         <div class="btns" style="margin-top:10px"><button class="btn" id="quitBtn">Back to title</button></div>
       </div>
     </div>
@@ -348,7 +348,7 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
 
   <div class="keys">
     <span><kbd>WASD</kbd> move</span><span><kbd>Shift</kbd> shift lock</span><span><kbd>Mouse</kbd> aim, click or hold to shoot</span><span><kbd>Right-drag</kbd> or <kbd>Z</kbd>/<kbd>C</kbd> turn camera</span><span><kbd>Wheel</kbd> zoom</span>
-    <span><kbd>Q</kbd> pulse blast</span><span><kbd>Space</kbd> jump</span><span><kbd>X</kbd> dodge or leg ability (dash, slam, web, fly)</span><span><kbd>E</kbd> hold to open crate, press to buy off the belt</span>
+    <span><kbd>Q</kbd> pulse blast</span><span><kbd>Space</kbd> jump</span><span><kbd>X</kbd> dodge or leg ability (dash, slam, web, fly)</span><span><kbd>T</kbd> equip a better drop right away</span><span><kbd>E</kbd> hold to open crate, press to buy off the belt</span>
     <span><kbd>R</kbd> get in or out of your mech</span><span><kbd>I</kbd> index</span><span><kbd>K</kbd> skins</span><span><kbd>U</kbd> upgrades</span><span><kbd>M</kbd> sound on/off</span><span><kbd>H</kbd> send crate to yard</span><span><kbd>B</kbd> workshop</span><span><kbd>F</kbd>/<kbd>G</kbd> fight or flee</span>
   </div>
   <div class="touch">
@@ -811,6 +811,7 @@ const SOUNDS = {
   open:    [0.2,  () => { noiz(0.2, 0.1, 2000, 500); tone(400, 0.3, 'triangle', 0.05, 1200); }],
   click:   [0.03, () => tone(700, 0.03, 'square', 0.03)],
   warn:    [0.3,  () => tone(440, 0.5, 'sawtooth', 0.06, 220)],
+  equip:   [0.2,  () => { tone(440, 0.08, 'square', 0.04); tone(660, 0.1, 'square', 0.04, 0, 0.07); tone(990, 0.14, 'triangle', 0.05, 0, 0.14); noiz(0.1, 0.05, 3000, 900); }],
   zap:     [0.15, () => { tone(900, 0.18, 'sawtooth', 0.04, 2400); tone(1400, 0.12, 'square', 0.03, 600, 0.05); noiz(0.15, 0.05, 7000, 2000); }],
   error:   [0.2,  () => { tone(220, 0.12, 'square', 0.04); tone(165, 0.18, 'square', 0.04, 0, 0.1); }],
   streak:  [0.3,  () => { [659,880,1175].forEach((f,i) => tone(f, 0.14, 'square', 0.045, 0, i*0.06)); noiz(0.3, 0.06, 6000, 1500); }]};
@@ -1362,11 +1363,29 @@ function baseLoot(c){
   return {parts, scrap: ri(L.scrap[0], L.scrap[1]) * (1 + 0.3*((c.zone||1)-1))|0};
 }
 let reveals = [];
+// quick equip: when a drop beats what you're wearing, press T to put it on right away (no trip to the workshop)
+let upg = null;
+function checkUpgrade(p){
+  if (!S.mechBuilt) return; const cur = partById(S.eq[p.slot]);
+  if (cur && p.power <= cur.power) return; if (upg && partById(upg.id) && upg.gain > p.power - (cur ? cur.power : 0)) return;
+  upg = {id:p.id, slot:p.slot, gain:p.power - (cur ? cur.power : 0), until:clock + 12};
+}
+function quickEquip(){
+  if (!upg || clock > upg.until) return; const p = partById(upg.id); if (!p){ upg = null; return; }
+  const i = S.pads.indexOf(p.id); if (i >= 0) S.pads[i] = null;
+  S.eq[p.slot] = p.id; afterGearChange(); sfx('equip'); flash(TIERS[p.tier].c, 0.25);
+  note('Equipped '+p.name+': +'+upg.gain+' power!', TIERS[p.tier].c); upg = null;
+}
+function upgHUD(){
+  if (!upg || clock > upg.until) return; const p = partById(upg.id); if (!p) return;
+  const k = Math.min(1, (upg.until - clock)/0.5), pulse = 0.7 + 0.3*Math.sin(clock*8);
+  ctx.globalAlpha = k; text('T: EQUIP ' + p.name.toUpperCase() + '  +' + upg.gain + ' POWER', W/2, H - 58, shade(TIERS[p.tier].c, pulse + 0.3), 8, 'center'); ctx.globalAlpha = 1;
+}
 function giveLoot(list, scrap, header){
   for (const p of list) reveals.push({p, t:0});
   sfx('loot');
   if (header) note(header, '#ffcf3a');
-  for (const p of list){ note('+ '+p.name+' ('+p.slot+', +'+p.power+')', TIERS[p.tier].c); givePart(p); if (p.tier >= 5){ flash(TIERS[p.tier].c, 0.45); note(TIERS[p.tier].r.toUpperCase()+' DROP!', TIERS[p.tier].c); } }
+  for (const p of list){ note('+ '+p.name+' ('+p.slot+', +'+p.power+')', TIERS[p.tier].c); givePart(p); checkUpgrade(p); if (p.tier >= 5){ flash(TIERS[p.tier].c, 0.45); note(TIERS[p.tier].r.toUpperCase()+' DROP!', TIERS[p.tier].c); } }
   addXp(6*list.length + 4);
   scrap = Math.round(scrap * (P.inMech ? ST.scrapMul : 1));
   S.scrap += scrap; if (scrap > 0) note('+'+scrap+' scrap', '#c9d2e3');
@@ -1652,6 +1671,7 @@ addEventListener('keydown', e => {
   if (e.code==='KeyQ') pulse();
   if (e.code==='KeyE' && !tryStealOrBuy()) tryBuy();
   if (e.code==='KeyL') toggleLock();
+  if (e.code==='KeyT') quickEquip();
   if (e.code==='KeyR') enterMech();
   if (e.code==='Space') jump();
   if (e.code==='KeyX') ability();
@@ -4268,7 +4288,7 @@ let VIGK = 0, HUDK = 1;
 function drawHUD(){
   const k = S.bigText ? 1.25 : 1; W = 640/k; H = 360/k; HUDK = k;
   if (VIGK !== k){ VIGNETTE = null; VIGK = k; }
-  try { drawHUDInner(); if (!BIGMAP){ tutHUD(); stealHUD(); streakHUD(1/60); eventHUD(); achHUD(1/60); } } finally { W = 640; H = 360; }
+  try { drawHUDInner(); if (!BIGMAP){ tutHUD(); stealHUD(); streakHUD(1/60); eventHUD(); achHUD(1/60); upgHUD(); } } finally { W = 640; H = 360; }
 }
 function drawHUDInner(){
   const hk = hud.width/640*HUDK; ctx.setTransform(hk,0,0,hk,0,0); ctx.imageSmoothingEnabled = true;
