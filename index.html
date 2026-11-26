@@ -1103,7 +1103,7 @@ function killEnemy(e){
   burst(e.x,e.y,'#ffb347',26,180); burst(e.x,e.y,'#555',10,90); ring(e.x,e.y,'#ffdd88',30*e.sc);
   const reward = Math.round(3*e.tier*e.tier*ESIZE[e.size||1].rw * (P.inMech ? ST.scrapMul : 1));
   S.scrap += reward; S.kills++; killStreak(e); addXp(Math.round((4 + 3*e.tier) * ESIZE[e.size||1].rw)); if ((e.size||1) >= 3) hitStop = Math.max(hitStop, 0.08);
-  floater(e.x, e.y, '+'+reward+' scrap', '#ffcf3a', 46*e.sc);
+  floater(e.x, e.y, '+'+reward+' scrap', '#ffcf3a', 46*e.sc); spillCoins(e.x, e.y, Math.min(12, 3 + (e.size||1)*2 + (e.elite ? 4 : 0)));
   if (e.kind==='rival'){
     note('Rival Mech destroyed! +'+reward+' scrap','#ff8c7a');
     if (e.crate){ e.crate.rival = null; e.crate.claim = 0; }
@@ -1115,6 +1115,18 @@ function killEnemy(e){
     giveLoot([newPart(Math.min(NR, rollRarity(z) + 1), null, z), newPart(Math.min(NR, rollRarity(z) + 2), null, z)], 150*z*z, 'MINI-BOSS DOWN: '+e.name+'! It comes back in 3 minutes.'); }
   if (e.wave && wave === e.wave) onWaveKill();
 }
+// scrap coins: a burst of coins that fly into you after a kill (the scrap itself is already counted)
+let coins = [];
+function spillCoins(x, y, n){ for (let k=0;k<n;k++){ const a = R()*6.283, sp = rr(60, 170); coins.push({x, y, h:rr(8,20), vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, vh:rr(60,140), t:0, spin:R()*6}); } }
+function coinTick(dt){
+  if (!coins.length) return; let got = 0;
+  for (const c of coins){ c.t += dt;
+    if (c.t < 0.45){ c.x += c.vx*dt; c.y += c.vy*dt; c.vx *= 0.9; c.vy *= 0.9; c.vh -= 420*dt; c.h = Math.max(3, c.h + c.vh*dt); }
+    else { const tx = P.x, ty = P.y, d = Math.hypot(tx-c.x, ty-c.y), sp = 300 + (c.t-0.45)*900;
+      if (d < 14 || P.dead){ c.done = true; got++; continue; } c.x += (tx-c.x)/d*Math.min(d, sp*dt); c.y += (ty-c.y)/d*Math.min(d, sp*dt); c.h += ((P.inMech ? 30 : 16) - c.h)*Math.min(1, dt*6); } }
+  coins = coins.filter(c => !c.done && c.t < 4); if (got) sfx('coin');
+}
+function drawCoins(bt){ for (const c of coins) cyl(bt, c.x, c.y, c.h, 4.2, 1.1, 4.2, 0, '#ffcf3a', 1, Math.PI/2 + Math.sin(clock*9 + c.spin)*0.6); }
 // kill streaks: kills close together build up a streak with a bonus and a big callout
 let streak = 0, streakT = 0, streakShow = null;
 const STREAK = [null, null, 'DOUBLE KILL', 'TRIPLE KILL', 'QUAD KILL', 'RAMPAGE', 'UNSTOPPABLE', 'MECH GOD'];
@@ -2277,6 +2289,7 @@ function updateBullets(dt){
   bullets = bullets.filter(b => b.life > 0);
   for (const p of parts){ p.x += p.vx*dt; p.y += p.vy*dt; p.vx *= 0.9; p.vy *= 0.9; p.life -= dt; if (p.vh){ p.h += p.vh*dt; p.vh -= 340*dt; if (p.h < 0){ p.h = 0; p.vh *= -0.35; } } }
   parts = parts.filter(p => p.life > 0);
+  coinTick(dt);
   for (const f of floaters){ f.h += 22*dt; f.life -= dt; }
   floaters = floaters.filter(f => f.life > 0);
   for (const b of bolts) b.t -= dt;
@@ -3486,7 +3499,8 @@ function drawCreature(bt, e, zone, boss){
     if (boss){ for (let k=0;k<6;k++) Rod(box,-8+k*3,0,21+bob,7,2,2,'#7fe3ff',1,Math.PI); core(12,12+bob,2.6); bossBits(15,25+bob,0); }
   } else if (zone === 5){ // neon sentry: hovering core, spinning ring, twin cannons
     const hv = 14 + Math.sin(t*2.4)*1.6;
-    Cy(0,0,0.2,12,0.4,12,glow,1); Cy(0,0,1,4,hv-4,4,'#22263a',1);
+    Cy(0,0,0.2,14,0.4,14,glow,1); Cy(0,0,0,12,3,12,dark); Cy(0,0,3,8,2,8,shade(dark,1.3));   // heavy base plate
+    Cy(0,0,4,6,hv-10,6,'#2c3048'); for (const yy of [8, 12]) Cy(0,0,yy,7.4,1,7.4,glow,1);   // thick column with light rings, up into the core
     Sp(0,0,hv,18,16,18,body); B(0,0,hv+7.4,18.4,1.2,4,glow,1); B(0,0,hv+7.4,4,1.2,18.4,'#ff4fd0',1);
     const r0 = t*2.5; for (let k=0;k<8;k++){ const an = r0 + k*0.785; Sp(Math.cos(an)*13,Math.sin(an)*13,hv+6,3,3,3,k%2?glow:'#ff4fd0',1); }
     Sp(7.6,0,hv+5,5,6,8,'#15171c'); B(9.6,0,hv+7,1,2,5,glow,1);
@@ -3533,9 +3547,9 @@ function drawCreature(bt, e, zone, boss){
     const bob = Math.sin(ph*0.5)*1.2*amp + Math.sin(t*1.5)*0.6, H0 = 26 + bob;
     for (let i=0;i<3;i++){ const an = i*2.094 + 0.5, lp = Math.sin(ph + i*2.094)*0.25*amp;
       const fx = Math.cos(an)*9, fz = Math.sin(an)*9;
-      Rod(cyl,fx,fz,H0,12,2.6,2.6,dark,0,0.75+lp,an); const [kf,kh] = end(0,H0,12,0.75+lp);
-      const kx = Math.cos(an)*(9+kf), kz = Math.sin(an)*(9+kf); Sp(kx,kz,kh-2,4,4,4,glow,1);
-      Rod(cyl,kx,kz,kh,kh,2,2,body,0,-0.25,an); Sp(kx+Math.cos(an)*(-Math.sin(0.25)*kh),kz+Math.sin(an)*(-Math.sin(0.25)*kh),0,5,1.6,5,dark); }
+      Rod(cyl,fx,fz,H0,12,4.4,4.4,dark,0,0.75+lp,an); const [kf,kh] = end(0,H0,12,0.75+lp);
+      const kx = Math.cos(an)*(9+kf), kz = Math.sin(an)*(9+kf); Sp(kx,kz,kh-2.6,5.6,5.6,5.6,shade(dark,1.2)); Sp(kx,kz,kh-1.4,3,3,3,glow,1);
+      Rod(cyl,kx,kz,kh,kh,3.8,3.8,body,0,-0.25,an); Rod(box,kx,kz,kh-3,kh*0.55,1.6,4.8,shade(body,1.12),0,-0.25,an); /* thicker shin with an armour plate */ Sp(kx+Math.cos(an)*(-Math.sin(0.25)*kh),kz+Math.sin(an)*(-Math.sin(0.25)*kh),0,5,1.6,5,dark); }
     Cy(0,0,H0-3,30,4,30,body); Cy(0,0,H0+1,24,2,24,shade(body,0.85)); Cy(0,0,H0-4,22,1.2,22,glow,1);
     Sp(0,0,H0+1,15,12,15,'#9be7ff',5 ); Sp(0,0,H0+3,8,7,8,glow,1);
     for (let k=0;k<6;k++){ const an = t*2 + k*1.047; Sp(Math.cos(an)*14,Math.sin(an)*14,H0-1,2.4,2.4,2.4,k%2?'#ffffff':glow,1); }
@@ -3608,7 +3622,7 @@ function buildDynamic(){
   for (const c of crates) if (Math.abs(c.x-P.x) < 1100 && Math.abs(c.y-P.y) < 1100) drawCrateDyn(bt, c);
   for (const e of enemies) drawEnemyDyn(bt, e);
   drawPlayerDyn(bt);
-  drawRemoteDyn(bt); drawFriendBaseDyn(bt); drawMotes(bt); lockDyn(bt);
+  drawRemoteDyn(bt); drawFriendBaseDyn(bt); drawMotes(bt); lockDyn(bt); drawCoins(bt);
   // treadmill belts
   if (P.y > 900) for (const t of TREADS) for (let k=0;k<6;k++){ const zz = t.y - 48 + ((k*16 + clock*70) % 96); box(bt, t.x, zz, 6.1, 40, 0.4, 3, 0, '#1a1c22'); }
   // portals (zone side and arena exits)
