@@ -289,7 +289,7 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
           </div>
         </div>
         <p class="label" style="margin-top:12px">Controls</p>
-        <p class="body" style="font-size:.85rem;margin:0;line-height:1.5">Move WASD · Aim with the mouse · Shoot: click or hold · Zoom: wheel · Turn camera: right-drag, Z / C · Q pulse · Space dodge or leg ability · E buy, open, steal · R get in or out of your mech · B workshop · I index · K skins · U upgrades · L lock your base · P multiplayer · M sound · N world map · F / G / H fight, flee or yard a crate · Esc pause</p>
+        <p class="body" style="font-size:.85rem;margin:0;line-height:1.5">Move WASD · Aim with the mouse · Shoot: click or hold · Zoom: wheel · Turn camera: right-drag, Z / C · Q pulse · Space jump · X dodge or leg ability · E buy, open, steal · R get in or out of your mech · B workshop · I index · K skins · U upgrades · L lock your base · P multiplayer · M sound · N world map · F / G / H fight, flee or yard a crate · Esc pause</p>
         <div class="btns" style="margin-top:10px"><button class="btn" id="quitBtn">Back to title</button></div>
       </div>
     </div>
@@ -345,7 +345,7 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
 
   <div class="keys">
     <span><kbd>WASD</kbd> move</span><span><kbd>Shift</kbd> shift lock</span><span><kbd>Mouse</kbd> aim, click or hold to shoot</span><span><kbd>Right-drag</kbd> or <kbd>Z</kbd>/<kbd>C</kbd> turn camera</span><span><kbd>Wheel</kbd> zoom</span>
-    <span><kbd>Q</kbd> pulse blast</span><span><kbd>Space</kbd> leg ability (dash or slam)</span><span><kbd>E</kbd> hold to open crate, press to buy off the belt</span>
+    <span><kbd>Q</kbd> pulse blast</span><span><kbd>Space</kbd> jump</span><span><kbd>X</kbd> dodge or leg ability (dash, slam, web, fly)</span><span><kbd>E</kbd> hold to open crate, press to buy off the belt</span>
     <span><kbd>R</kbd> get in or out of your mech</span><span><kbd>I</kbd> index</span><span><kbd>K</kbd> skins</span><span><kbd>U</kbd> upgrades</span><span><kbd>M</kbd> sound on/off</span><span><kbd>H</kbd> send crate to yard</span><span><kbd>B</kbd> workshop</span><span><kbd>F</kbd>/<kbd>G</kbd> fight or flee</span>
   </div>
   <div class="touch">
@@ -353,6 +353,7 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
     <button class="btn fight" id="tFire">Fire</button>
     <button class="btn" id="tPulse">Pulse</button>
     <button class="btn" id="tMech">Mech</button>
+    <button class="btn" id="tJump">Jump</button>
     <button class="btn" id="tSkill">Skill</button>
     <button class="btn primary" id="tOpen">Open</button>
     <button class="btn" id="tBay">Bay</button>
@@ -426,12 +427,12 @@ function perkText(p){
     case 'Drone Arms': return '+1 attack drone';
     case 'Rage Arms': return 'Up to +'+pct(0.4+0.08*t)+' damage as your HP drops';
     case 'Strider Legs': return '+'+pct(0.06+0.02*t)+' speed and double health regen';
-    case 'Piston Legs': return 'SPACE: ground slam ('+pct(0.6+0.15*t)+' of pulse damage), knocks bots back';
-    case 'Thruster Legs': return 'SPACE: rocket dash every '+Math.max(0.8,3-0.25*t).toFixed(2)+'s';
-    case 'Jet Wings': return 'FLYING MECH. SPACE: take off and fly over walls, rocks and enemies ('+(6+t*1.5).toFixed(1)+'s of fuel). SPACE again to land';
+    case 'Piston Legs': return 'X: ground slam ('+pct(0.6+0.15*t)+' of pulse damage), knocks bots back';
+    case 'Thruster Legs': return 'X: rocket dash every '+Math.max(0.8,3-0.25*t).toFixed(2)+'s';
+    case 'Jet Wings': return 'FLYING MECH. X: take off and fly over walls, rocks and enemies ('+(6+t*1.5).toFixed(1)+'s of fuel). X again to land';
     case 'Hover Legs': return '+'+pct(0.2+0.04*t)+' speed, glides over the ground';
     case 'Tank Treads': return '+'+pct(0.3+0.05*t)+' HP and 10% damage resist, a bit slower';
-    case 'Spider Legs': return '+'+pct(0.12+0.02*t)+' speed. SPACE: web blast slows nearby bots';
+    case 'Spider Legs': return '+'+pct(0.12+0.02*t)+' speed. X: web blast slows nearby bots';
     case 'Reactor': return 'Pulse blast hits '+pct(0.3+0.1*t)+' harder';
     case 'Power Cell': return 'Pulse blast recharges in '+(PULSE_CD*Math.max(0.25,0.65-0.05*t)).toFixed(1)+'s';
     case 'Fusion Core': return 'Pulse blast starts '+(2.5+0.5*t).toFixed(1)+'s of Overdrive (double fire rate)';
@@ -564,7 +565,7 @@ function stats(){
     od: 2.5+0.5*T.Core, heal: 0.1+0.04*T.Core, luck: (K.Head === 'Lucky Helm' ? 0.08+0.03*T.Head : 0) + 0.03*((S.rbs||{}).luck||0),
     rage: K.Arms === 'Rage Arms' ? 0.4+0.08*T.Arms : 0, vamp: K.Torso === 'Vampire Frame' ? 0.03+0.01*T.Torso : 0,
     freeze: K.Core === 'Freeze Core' ? 2+0.4*T.Core : 0, drones, droneMul: K.Torso === 'Drone Bay' ? 1.1+0.05*T.Torso : 1,
-    scale: nsz ? sz/nsz : 1, setT, setN, setK};
+    scale: Math.min(1.9, 1 + sz - nsz), setT, setN, setK};   // every Big/Gigantic/Colossal part adds its own growth, so one big part is visible
 }
 const setText = st => st.setK ? DSG[st.setT].n+' set '+st.setN+'/6: +'+Math.round(st.setK*100)+'% damage and HP'+(st.setN >= 6 ? ', +10% speed' : '') :
   st.setN ? 'No set bonus yet. Wear 3 parts of one design ('+DSG[st.setT].n+' '+st.setN+'/3)' : '';
@@ -1615,7 +1616,8 @@ addEventListener('keydown', e => {
   if (e.code==='KeyE' && !tryStealOrBuy()) tryBuy();
   if (e.code==='KeyL') toggleLock();
   if (e.code==='KeyR') enterMech();
-  if (e.code==='Space') ability();
+  if (e.code==='Space') jump();
+  if (e.code==='KeyX') ability();
   if ((e.code==='ShiftLeft' || e.code==='ShiftRight') && !paused()) setShiftLock(!shiftLock);
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -1693,6 +1695,7 @@ holdBtn('tOpen', () => { touchOpen = true; tryBuy(); }, () => { touchOpen = fals
 $('tPulse').addEventListener('click', () => pulse());
 $('tMech').addEventListener('click', () => enterMech());
 $('tSkill').addEventListener('click', () => ability());
+$('tJump').addEventListener('click', () => jump());
 $('tBay').addEventListener('click', () => toggleBay());
 
 /* ================= overlays ================= */
@@ -2193,6 +2196,23 @@ function explode(b){
   if (b.from === 'fx') return;   // the friend's shot, shown only: its damage is worked out on their side
   for (const e of targets()){ if (e.dead) continue; const d = Math.hypot(e.x-b.x, e.y-b.y); if (d < b.splash + e.r) hurtEnemy(e, b.dmg*(1 - 0.5*d/(b.splash+e.r)), b.crit); }
 }
+// jump: everyone can hop (Space). Mechs clear crates and rocks at the top of a jump; Piston Legs slam on landing
+function jump(){
+  if (paused() || P.dead || P.fly || (P.jh||0) > 0.5 || P.carry && !P.inMech) return;
+  P.jv = P.inMech ? 165 : 175; P.jh = 0.6; P.jPeak = 0; sfx('dash');
+  burst(P.x, P.y, '#c9d2e3', 8, 70, true);
+}
+function jumpTick(dt){
+  if (!(P.jh > 0)) return;
+  P.jv -= (P.inMech ? 460 : 520)*dt; P.jh += P.jv*dt; P.jPeak = Math.max(P.jPeak||0, P.jh);
+  if (P.jh <= 0){ P.jh = 0; P.jv = 0;
+    const zs = zoneAt(P.x,P.y), dc = zs ? shade(ZONES[zs-1].f1, 0.8) : '#b9ab8e', big = P.inMech ? mS()/1.45 : 0.5;
+    burst(P.x, P.y, dc, 10, 90, true); ring(P.x, P.y, dc, 28*big, true); sfx('step'); shake = Math.max(shake, P.inMech ? 2.5 : 0.8);
+    if (P.inMech && ST.K.Legs === 'Piston Legs' && P.jPeak > 15 && !flee){   // landing slam: smaller than the X slam, no cooldown
+      ring(P.x,P.y,'#ffcf3a',70); sfx('smash'); shake = 4;
+      for (const e of targets()){ if (e.dead) continue; const d = dist(e,P); if (d < 70 + e.r){ hurtEnemy(e, ST.pulse*ST.slam*0.5); const k = 24/(d||1); e.x += (e.x-P.x)*k; e.y += (e.y-P.y)*k; collide(e,false); } } }
+    P.jPeak = 0; }
+}
 function ability(){
   if (paused() || P.dead || P.abT > 0) return;
   const fx = Math.cos(P.moveAng ?? P.face), fy = Math.sin(P.moveAng ?? P.face);
@@ -2206,7 +2226,7 @@ function ability(){
     for (const e of targets()){ if (e.dead) continue; const d = dist(e,P); if (d < 100 + e.r){ hurtEnemy(e, ST.pulse*ST.slam); const k = 40/(d||1); e.x += (e.x-P.x)*k; e.y += (e.y-P.y)*k; collide(e,false); } }
   }
   else if (L === 'Spider Legs'){ P.abT = 4; sfx('dash'); ring(P.x,P.y,'#ffffff',170); for (const e of enemies) if (!e.dead && dist(e,P) < 170 + e.r){ e.slowT = 3; } note('Webbed!', '#ffffff'); }
-  else note((L || 'These legs')+' have no SPACE ability. Thruster Legs dash, Piston Legs slam.', '#9aa6bd');
+  else note((L || 'These legs')+' have no X ability. Thruster Legs dash, Piston Legs slam (and slam when they land a jump).', '#9aa6bd');
 }
 function pulse(){
   if (paused() || P.dead || P.pulseT > 0) return;
@@ -2307,7 +2327,8 @@ function updatePlayer(dt){
   const fuelTime = 6 + ((partById(S.eq.Legs)||{tier:1}).tier)*1.5;
   if (P.fly){ P.fuel -= dt/fuelTime; if (P.fuel <= 0){ P.fuel = 0; P.fly = false; note('Out of fuel! Landing.', '#ff8c7a'); } }
   else P.fuel = Math.min(1, P.fuel + dt/5);
-  P.lift = (P.lift||0) + ((P.fly ? 46 : 0)*mS()/1.45 - (P.lift||0))*Math.min(1, dt*3.5);
+  P.flyL = (P.flyL||0) + ((P.fly ? 46 : 0)*mS()/1.45 - (P.flyL||0))*Math.min(1, dt*3.5);
+  jumpTick(dt); P.lift = P.flyL + (P.jh||0);
   const spdMul = ((S.adm && S.adm.spd) || 1) * (P.odT > 0 && P.inMech ? 1.2 : 1) * trailMul() * trainMul() * (P.fly ? 1.35 : 1) * (P.carry ? STEAL_SLOW : 1);
   P.x += mx*cs.speed*9*spdMul*dt; P.y += my*cs.speed*9*spdMul*dt;
   if (P.dashT > 0){ const dsp = (P.inMech ? 3.2 : 2.6)*cs.speed*9; P.x += P.dvx*dsp*dt; P.y += P.dvy*dsp*dt; if (P.inMech) burst(P.x, P.y, '#ffb347', 1, 30); }
@@ -3521,7 +3542,7 @@ function drawPlayerDyn(bt){
   } else {
     const SP = skin().p;
     rig(bt, P.x, P.y, P.face, {s:PILOT_S, pilot:true, body:SP[0], dark:SP[1], head:SP[2], pack:SP[3], visor:SP[4], accent:SP[5], light:SP[5],
-      antenna:true, gun:{kind:'Pilot', col:'#5fe0ff'}, aimArm: P.shootT > 0, walk:P.walk, amp:P.amp, hit, lean:leanP});
+      antenna:true, gun:{kind:'Pilot', col:'#5fe0ff'}, aimArm: P.shootT > 0, walk:P.jh > 0 ? 0.9 : P.walk, amp:P.jh > 0 ? 0.6 : P.amp, hit, lift:P.jh||0, lean:leanP});
   }
 }
 const ENEMY_GUN = {guard:'Blaster', wave:'Scatter Gun', rival:'Rocket Pod', boss:'Rail Cannon', chaser:'Blaster'};
@@ -3687,18 +3708,33 @@ function drawCreature(bt, e, zone, boss){
   }
 }
 function drawCrateDyn(bt, c){
-  const col = TIERS[c.tier].c, sz = c.r*2.6, yaw = c.spin||0, wood = mix('#9a6a42', col, 0.3), cy_ = Math.cos(yaw), sy_ = Math.sin(yaw);
-  cyl(ALPHA, c.x, c.y, 0.3, sz*2.8, 0.6, sz*2.8, 0, col, 5);
-  shadow(c.x, c.y, sz*1.5);
-  box(bt, c.x, c.y, 0, sz, sz*0.55, sz*0.75, yaw, wood);
-  barrel(bt, c.x - cy_*sz/2, c.y - sy_*sz/2, sz*0.55, yaw, sz, sz*0.375, shade(wood, 1.12));
-  for (const k of [-0.44, 0, 0.44]) box(bt, c.x + cy_*k*sz, c.y + sy_*k*sz, 0, sz*0.08, sz*0.94, sz*0.8, yaw, '#4a4f5a');
-  box(bt, c.x - sy_*sz*0.39, c.y + cy_*sz*0.39, sz*0.32, sz*0.18, sz*0.24, sz*0.05, yaw, col, 1);
-  const bob = Math.sin(clock*2 + c.id)*3;
-  sph(bt, c.x, c.y, sz*1.25 + bob, sz*0.34, sz*0.5, sz*0.34, clock*1.5, col, 1);
-  cyl(bt, c.x, c.y, sz*1.8, 2, 170, 2, 0, shade(col, 0.75 + 0.25*Math.sin(clock*4)), 1);
-  if (c.tier >= 4) for (let k=0;k<4;k++){ const a = clock*2 + k*1.57; sph(bt, c.x+Math.cos(a)*sz*0.9, c.y+Math.sin(a)*sz*0.9, sz*0.6+Math.sin(clock*3+k)*sz*0.3, 2.6, 2.6, 2.6, 0, k%2 ? '#ffffff' : col, 1); }
-  if (c.supply) for (const [dx,dz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) cyl(bt, c.x+dx*sz*0.55, c.y+dz*sz*0.45, 0, 3.4, sz+6, 3.4, 0, '#ffcf3a', 1);
+  // armoured loot crate: gunmetal body, glowing rarity seam under the lid, corner bumpers; rarer crates get more trim
+  const col = TIERS[c.tier].c, t = c.tier, sz = c.r*2.6, yaw = c.spin||0, cy_ = Math.cos(yaw), sy_ = Math.sin(yaw);
+  const at = (lx, lz) => [c.x + cy_*lx - sy_*lz, c.y + sy_*lx + cy_*lz];
+  const metal = mix('#3d434f', col, 0.16), dark = '#1f2229', light = shade(metal, 1.3), pulse = 0.8 + 0.2*Math.sin(clock*3 + c.id);
+  const L = sz, Wd = sz*0.72, Hb = sz*0.48, opening = P.openC === c ? Math.min(1, P.openT/(OPEN_TIME*(CS().openMul||1))) : 0;
+  const B = (lx, lz, h, sx, sh, sz_, cl, md) => { const [x, z] = at(lx, lz); box(bt, x, z, h, sx, sh, sz_, yaw, cl, md); };
+  cyl(ALPHA, c.x, c.y, 0.3, sz*2.4, 0.6, sz*2.4, 0, col, 5);
+  shadow(c.x, c.y, sz*1.4);
+  B(0, 0, 0, L*1.08, sz*0.08, Wd*1.1, dark);                                    // base plinth
+  B(0, 0, sz*0.08, L, Hb - sz*0.08, Wd, metal);                                 // body
+  for (const sx of [-1, 1]) for (const sz2 of [-1, 1]) B(sx*L/2, sz2*Wd/2, 0, sz*0.16, Hb + sz*0.12, sz*0.16, dark);   // corner bumpers
+  for (const f of [-1, 1]){ B(0, f*(Wd/2 + 0.2), sz*0.18, L*0.62, Hb*0.5, 0.6, shade(metal, 0.82));                    // recessed side panel
+    for (const k of [-0.36, 0.36]) B(k*L, f*(Wd/2 + 0.35), sz*0.12, sz*0.05, Hb*0.62, 0.5, col, 1); }                      // glow strips
+  B(0, Wd/2 + 0.6, Hb*0.42, sz*0.2, sz*0.2, 0.6, '#ffffff', 1); B(0, Wd/2 + 0.45, Hb*0.36, sz*0.3, sz*0.3, 0.6, col, 1);   // front emblem
+  for (const sx of [-1, 1]) B(sx*(L/2 + sz*0.1), 0, Hb*0.45, sz*0.06, sz*0.1, Wd*0.4, dark);                             // side handles
+  const lift = opening*sz*0.22 + (opening > 0 ? Math.sin(clock*40)*0.3 : 0);
+  B(0, 0, Hb - sz*0.01, L*0.97, sz*0.05, Wd*0.97, shade(col, pulse + opening*0.6), 1);                                // light seam under the lid
+  if (opening > 0) B(0, 0, Hb, L*0.95, lift, Wd*0.95, col, 1);                                                          // light pours out as it opens
+  B(0, 0, Hb + sz*0.04 + lift, L*1.03, sz*0.14, Wd*1.03, light);                                                        // lid
+  B(0, 0, Hb + sz*0.18 + lift, L*0.74, sz*0.05, Wd*0.62, shade(metal, 0.9));                                           // lid bevel
+  if (t >= 3) B(0, 0, Hb + sz*0.23 + lift, L*0.3, sz*0.03, Wd*0.3, col, 1);                                            // lid light
+  if (t >= 5) for (const sx of [-1, 1]) for (const sz2 of [-1, 1]) B(sx*L*0.5, sz2*Wd*0.5, Hb + sz*0.12, sz*0.12, sz*0.2, sz*0.12, col, 1);   // glowing corner caps
+  if (t >= 7) for (let k=0;k<3;k++){ const a = k*2.09 + c.id; sph(bt, c.x + Math.cos(a)*sz*0.25, c.y + Math.sin(a)*sz*0.2, Hb + sz*0.2 + lift, sz*0.14, sz*0.42, sz*0.14, a, k%2 ? '#ffffff' : col, 1); }   // crystals
+  if (t >= 4){ cyl(bt, c.x, c.y, Hb + sz*0.3, 2, 170, 2, 0, shade(col, 0.75 + 0.25*Math.sin(clock*4)), 1);              // light beam, seen from far away
+    const hr = sz*0.95 + Math.sin(clock*2 + c.id)*0.08*sz; cyl(ALPHA, c.x, c.y, Hb + sz*0.55, hr, 0.5, hr, clock*0.8, col, 5); }   // holo ring
+  if (c.supply){ for (const f of [-0.25, 0.25]) B(f*L, 0, 0, sz*0.1, Hb + sz*0.2, Wd*1.08, '#ffcf3a');                // hazard straps
+    const on = Math.floor(clock*3)%2 === 0; sph(bt, c.x, c.y, Hb + sz*0.3, sz*0.12, sz*0.12, sz*0.12, 0, on ? '#ff5d4a' : '#5a1a10', on ? 1 : 0); }
 }
 function ringDyn(bt, p){
   if (p.dull){ const r = p.ring*(1-p.life/p.max)+4; cyl(ALPHA, p.x, p.y, 0.4, r*2, 0.8, r*2, 0, p.col, 5); return; }
@@ -3853,7 +3889,7 @@ function render3D(){
   let zenith = mixA([0.13,0.42,0.9], [0.03,0.04,0.16], nightK);
   if (dusk){ horizon = mixA(horizon, [0.98,0.6,0.38], 0.45*dusk); zenith = mixA(zenith, [0.35,0.3,0.55], 0.4*dusk); }
   const fx = Math.cos(camYaw), fz = Math.sin(camYaw), cp = Math.cos(camPitch), sp = Math.sin(camPitch);
-  camZoom += ((P.inMech ? 1 : 0) - camZoom) * 0.08;
+  camZoom += ((P.inMech ? Math.max(1, mS()/1.45) : 0) - camZoom) * 0.08;   // bigger mechs (Big, Gigantic, Colossal parts) get a farther camera
   camBossK += ((bossFocus ? (bossFocus.kind === 'boss' ? 1.6 : 1.25) : 1) - camBossK)*0.03;   // pull back so big bosses fit on screen
   const D = (62 + camZoom*74)*camDistK*camBossK, CH = 13 + camZoom*30, SIDE = 10 + camZoom*12, shk = shake*Math.sin(clock*60);
   const ox = -fz*SIDE, oz = fx*SIDE;
@@ -3865,8 +3901,8 @@ function render3D(){
     if (hit){ Dc = Math.max(P.inMech ? 62*mS()/1.45 : 18, (k-1)/12*D); break; } }
   camDistS = Dc < camDistS || !camDistS ? Dc : camDistS + (Dc - camDistS)*0.06;
   const Dd = camDistS, sideK = Dd/D;
-  EYE = [P.x - fx*cp*Dd + ox*sideK, Math.max(4, CH + sp*Dd) + shk + (P.inMech ? P.lift||0 : 0), P.y - fz*cp*Dd + oz*sideK];
-  const target = [P.x + fx*28 + ox*sideK, CH + 2 + shk + (P.inMech ? P.lift||0 : 0), P.y + fz*28 + oz*sideK];
+  EYE = [P.x - fx*cp*Dd + ox*sideK, Math.max(4, CH + sp*Dd) + shk + (P.inMech ? P.lift||0 : (P.jh||0)*0.6), P.y - fz*cp*Dd + oz*sideK];
+  const target = [P.x + fx*28 + ox*sideK, CH + 2 + shk + (P.inMech ? P.lift||0 : (P.jh||0)*0.6), P.y + fz*28 + oz*sideK];
   VP = mul(persp(1.05, W/H, 2, 3000), lookAt(EYE, target, [0,1,0]));
   if (!glOk) return;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -4121,7 +4157,7 @@ function drawHUDInner(){
   text(flee ? 'PULSE LOCKED' : P.pulseT<=0 ? 'Q PULSE READY' : 'PULSE '+Math.ceil(P.pulseT), 51, H-17, flee ? '#ff8c7a' : '#fff', 8, 'center');
   const abName = !P.inMech ? 'DODGE' : ST.K.Legs === 'Jet Wings' ? (P.fly ? 'LAND' : 'FLY') : ST.K.Legs === 'Thruster Legs' ? 'DASH' : ST.K.Legs === 'Piston Legs' ? 'SLAM' : ST.K.Legs === 'Spider Legs' ? 'WEB' : null;
   if (abName){ px(100,H-20,90,14,'rgba(8,12,24,.58)'); px(103,H-17,84*(P.abT > 0 ? 1-P.abT/(P.inMech ? (abName==='SLAM'?5:abName==='WEB'?4:ST.dashCd) : 1.4) : 1),8, P.abT<=0 ? '#ffcf3a' : '#7a6420');
-    text(P.abT<=0 ? 'SPACE '+abName : abName+' '+Math.ceil(P.abT), 145, H-17, '#fff', 8, 'center'); }
+    text(P.abT<=0 ? 'X '+abName : abName+' '+Math.ceil(P.abT), 145, H-17, '#fff', 8, 'center'); }
   if (P.onTread) text((S.speedLvl||0) >= P.onTread.need ? 'PRESS E: TREADMILL MINIGAMES (TRAIN FASTER)' : 'NEEDS SPEED LEVEL '+P.onTread.need, W/2, H-74, '#ff9a2e', 8, 'center');
   if (P.inMech && ST.K.Legs === 'Jet Wings'){ px(100,H-30,90,8,'rgba(8,12,24,.58)'); px(102,H-28,86*(P.fuel??1),4, P.fly ? '#ffb347' : '#9be7ff'); text('FUEL', 100, H-40, '#9be7ff', 8); }
   if (P.inMech && ST.shield > 0){ px(10,19,142,3,'#0b1a22'); px(10,19,142*P.shield/ST.shield,3,'#5fe0ff'); }
