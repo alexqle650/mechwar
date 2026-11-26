@@ -1265,6 +1265,7 @@ function sendToYard(c){
 const MECH = {x:HANGAR.x, y:HANGAR.y, face:Math.PI/2, hp:0, state:'none', repairT:0};
 const CS = () => P.inMech ? ST : PILOT;
 function ensureSave(){
+  S.v = 2;   // save format version: bump it when the format changes, and upgrade older saves here
   if (S.mechBuilt === undefined) S.mechBuilt = SLOTS.every(sl => S.eq[sl] && partById(S.eq[sl]));
   if (!Array.isArray(S.pads) || S.pads.length !== 6) S.pads = [null,null,null,null,null,null];
   if (!Array.isArray(S.padCash) || S.padCash.length !== 6) S.padCash = [0,0,0,0,0,0];
@@ -2346,7 +2347,7 @@ function meshSph(NU, NV){
   for (let j=0;j<NV;j++) for (let i=0;i<NU;i++){ const a = pt(i,j), b = pt(i+1,j), c = pt(i+1,j+1), d = pt(i,j+1); v.push(...a,...b,...c,...a,...c,...d); }
   return v;
 }
-let VAO = {}, BUF = {};
+let VAO = {}, BUF = {}, MK_VAO = null;
 function initGL(){
   if (!gl) return false;
   const sh = (t,src) => { const s = gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
@@ -2355,13 +2356,13 @@ function initGL(){
   gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
   for (const n of ['uTime','uKind','uVP','uSun','uSunCol','uSky','uGround','uFog','uFogTop','uCam','uFogNear','uFogFar','uAmbK','uL','uLC','uNL']) U[n] = gl.getUniformLocation(prog, n);
-  for (const [k, data] of [['b', meshCube()], ['c', meshCyl(36)], ['s', meshSph(28, 18)]]){
+  for (const [k, data] of [['b', meshCube()], ['c', meshCyl(36)], ['s', meshSph(28, 18)], ['cL', meshCyl(14)], ['sL', meshSph(12, 8)]]){
     const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
     MESH[k] = {buf, count: data.length/6};
   }
   const mk = (k, ibuf) => {
     const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, MESH[k].buf);
+    gl.bindBuffer(gl.ARRAY_BUFFER, MESH[k].buf);   // k may be a low-poly mesh ('cL', 'sL')
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,24,0);
     gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,3,gl.FLOAT,false,24,12);
     gl.bindBuffer(gl.ARRAY_BUFFER, ibuf);
@@ -2370,7 +2371,8 @@ function initGL(){
     gl.bindVertexArray(null); return vao;
   };
   for (const set of ['STATIC','DYN','ALPHA','SKY']){ VAO[set] = {}; BUF[set] = {};
-    for (const k of ['b','c','s']){ const ib = gl.createBuffer(); BUF[set][k] = ib; VAO[set][k] = mk(k, ib); } }
+    for (const k of ['b','c','s']){ const ib = gl.createBuffer(); BUF[set][k] = ib; VAO[set][k] = mk(k, ib); if (k !== 'b') VAO[set][k+'L'] = mk(k+'L', ib); } }
+  MK_VAO = mk;
   gl.enable(gl.DEPTH_TEST);
   return true;
 }
@@ -2444,8 +2446,42 @@ function fxEnd(){
 }
 let BLOCKY_NOFX = false;
 function upload(name, set, usage){ for (const k of ['b','c','s']){ gl.bindBuffer(gl.ARRAY_BUFFER, BUF[name][k]); gl.bufferData(gl.ARRAY_BUFFER, set[k].a.subarray(0, set[k].n*STRIDE), usage); } }
-function drawSet(name, set){ for (const k of ['b','c','s']){ if (!set[k].n) continue; gl.uniform1i(U.uKind, k === 'b' ? 0 : k === 'c' ? 1 : 2); gl.bindVertexArray(VAO[name][k]); gl.drawArraysInstanced(gl.TRIANGLES, 0, MESH[k].count, set[k].n); } }
-function uploadStatic(){ upload('STATIC', STATIC, gl.STATIC_DRAW); }
+function drawSet(name, set){ const lo = GFX.fast && name !== 'SKY';
+  for (const k of ['b','c','s']){ if (!set[k].n) continue; const mk = lo && k !== 'b' ? k+'L' : k;
+    gl.uniform1i(U.uKind, k === 'b' ? 0 : k === 'c' ? 1 : 2); gl.bindVertexArray(VAO[name][mk]); gl.drawArraysInstanced(gl.TRIANGLES, 0, MESH[mk].count, set[k].n); } }
+// ---------- scenery in chunks: low-poly, and chunks beyond the far plane are skipped ----------
+const CHUNK = 1500, CHUNKS = [];
+function uploadStatic(){
+  for (const ch of CHUNKS) for (const k of CHUNK_KINDS){ if (ch.buf[k]){ gl.deleteBuffer(ch.buf[k]); gl.deleteVertexArray(ch.vao[k]); } }
+  CHUNKS.length = 0;
+  const byKey = new Map();
+  for (const k of ['b','c','s']){ const B = STATIC[k], a = B.a;
+    for (let i=0;i<B.n;i++){ const o = i*STRIDE, x = a[o], z = a[o+2], hx = a[o+3]/2, hz = a[o+5]/2;
+      const key = Math.max(hx, hz) > CHUNK/2 ? 'all' : Math.floor(x/CHUNK) + ',' + Math.floor(z/CHUNK);
+      let ch = byKey.get(key); if (!ch){ ch = {key, idx:{b:[], c:[], s:[], cH:[], sH:[]}, x0:1e9, x1:-1e9, z0:1e9, z1:-1e9, n:{}, buf:{}, vao:{}}; byKey.set(key, ch); CHUNKS.push(ch); }
+      ch.idx[k !== 'b' && Math.max(hx, hz) > 40 ? k+'H' : k].push(o);   /* big round things stay smooth */ ch.x0 = Math.min(ch.x0, x-hx); ch.x1 = Math.max(ch.x1, x+hx); ch.z0 = Math.min(ch.z0, z-hz); ch.z1 = Math.max(ch.z1, z+hz); } }
+  for (const ch of CHUNKS) for (const k of CHUNK_KINDS){ const list = ch.idx[k]; ch.n[k] = list.length; if (!list.length) continue;
+    const data = new Float32Array(list.length*STRIDE), src = STATIC[k[0]].a; list.forEach((o, j) => data.set(src.subarray(o, o+STRIDE), j*STRIDE));
+    const ib = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, ib); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    ch.mesh = ch.mesh || {}; ch.mesh[k] = chunkMesh(k); ch.buf[k] = ib; ch.vao[k] = MK_VAO(ch.mesh[k], ib); delete ch.idx[k]; }
+}
+const CHUNK_KINDS = ['b','c','s','cH','sH'], chunkMesh = k => k === 'b' ? 'b' : k.length === 2 ? (GFX.fast ? k[0]+'L' : k[0]) : k+'L';
+let STATIC_DRAWN = 0;
+function drawStatic(){
+  STATIC_DRAWN = 0;
+  for (const ch of CHUNKS){
+    if (ch.key !== 'all'){ const dx = Math.max(ch.x0 - EYE[0], 0, EYE[0] - ch.x1), dz = Math.max(ch.z0 - EYE[2], 0, EYE[2] - ch.z1); if (dx*dx + dz*dz > 3100*3100) continue; }
+    for (const k of CHUNK_KINDS){ if (!ch.n[k]) continue;
+      gl.uniform1i(U.uKind, k === 'b' ? 0 : k[0] === 'c' ? 1 : 2); gl.bindVertexArray(ch.vao[k]); gl.drawArraysInstanced(gl.TRIANGLES, 0, MESH[ch.mesh && ch.mesh[k] || chunkMesh(k)].count, ch.n[k]); STATIC_DRAWN += ch.n[k]; } }
+}
+// ---------- graphics quality: Fancy (bloom, smooth shapes, full resolution) or Fast ----------
+const GFX = {fast:false, auto:true, frames:0, slow:0, t:0};
+function applyGfx(){ const was = GFX.fast; GFX.fast = S.gfx === 'fast'; BLOCKY_NOFX = GFX.fast || S.glow === false; if (glOk && was !== GFX.fast) uploadStatic(); }
+function gfxWatch(dt){   // steps down to Fast once if the game runs under ~40 fps for 5 seconds
+  if (GFX.fast || S.gfxSet || document.hidden) return;
+  GFX.t += dt; GFX.frames++; if (dt > 1/40) GFX.slow++;
+  if (GFX.t >= 5){ if (GFX.slow > GFX.frames*0.6){ S.gfx = 'fast'; applyGfx(); save(); note('Switched to Fast graphics to keep things smooth. Change it in Settings.', '#5fe0ff'); } GFX.t = 0; GFX.frames = 0; GFX.slow = 0; }
+}
 function applyStyle(){
   BLOCKY = S.style === 'blocky';
   $('styleBtn').textContent = 'Style: ' + (BLOCKY ? 'Blocky' : 'Mixed');
@@ -3534,7 +3570,7 @@ function render3D(){
   VP = mul(persp(1.05, W/H, 2, 3000), lookAt(EYE, target, [0,1,0]));
   if (!glOk) return;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const cw = Math.max(320, Math.min(2200, Math.round(cv.clientWidth * dpr))), ch = Math.round(cw*9/16);
+  const cw = Math.max(320, Math.min(2200, Math.round(cv.clientWidth * dpr * (GFX.fast ? 0.7 : 1)))), ch = Math.round(cw*9/16);
   if (cv.width !== cw || cv.height !== ch){ cv.width = cw; cv.height = ch; }
   buildDynamic();
   const fxOn = fxBegin(horizon);
@@ -3567,7 +3603,7 @@ function render3D(){
   SKY.reset(); sph(SKY, EYE[0], EYE[2], EYE[1]-2500, 5000, 5000, 5000, 0, '#000000', 4);
   upload('SKY', SKY, gl.DYNAMIC_DRAW);
   gl.disable(gl.DEPTH_TEST); gl.depthMask(false); drawSet('SKY', SKY); gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
-  drawSet('STATIC', STATIC);
+  drawStatic();
   upload('DYN', DYN, gl.DYNAMIC_DRAW); drawSet('DYN', DYN);
   upload('ALPHA', ALPHA, gl.DYNAMIC_DRAW);
   gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
@@ -4152,7 +4188,7 @@ function netBadge(){
 /* ================= loop ================= */
 let glOk = false;
 try { glOk = initGL(); } catch(err){ console.error(err); glOk = false; }
-applyStyle();
+applyGfx(); applyStyle();
 for (let i=1;i<=NZ;i++) for (let k=0;k<3;k++) spawnCrate(i,false);
 note(S.mechBuilt ? 'Welcome back, pilot! Your mech is parked at the bench. Press R next to it.' : 'Welcome, pilot! Follow the cyan arrow to the Mech Workshop and press B to build your mech.', '#5fe0ff');
 if (hadSave && S.savedAt){
@@ -4166,7 +4202,7 @@ function frame(now){
   flashT = Math.max(0, flashT - dt);
   hitMark = hitMark > 0 ? Math.max(0, hitMark - dt) : hitMark < 0 ? Math.min(0, hitMark + dt) : 0;
   dmgFlash = Math.max(0, dmgFlash - dt*1.5); missionFlash = Math.max(0, missionFlash - dt);
-  netTick(dt); if (!paused()) animTick(dt);
+  netTick(dt); if (!paused()){ animTick(dt); gfxWatch(dt); }
   render3D();
   drawHUD();
   chipT -= dt;
