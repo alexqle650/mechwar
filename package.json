@@ -1,0 +1,8 @@
+{
+  "name": "mechwar",
+  "private": true,
+  "type": "module",
+  "description": "Mech Wars: Crate Clash. The game is index.html; this file is only for the automated test.",
+  "scripts": { "test": "node tests/smoke.mjs" },
+  "devDependencies": { "playwright": "^1.49.0" }
+}

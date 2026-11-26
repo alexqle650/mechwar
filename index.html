@@ -100,6 +100,9 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
 @media (max-width:640px){.bay{grid-template-columns:minmax(0,1fr)}.inv{max-height:none}.keys{display:none}}
 @media (min-width:1200px){.wrap{max-width:min(96vw,2400px)}.stage,.keys,.touch{max-width:max(960px,calc((100vh - 190px) * 16 / 9))}}
 @media (prefers-reduced-motion:reduce){.btn{transition:none}}
+  .setgrid{display:grid;grid-template-columns:150px 1fr;gap:6px 12px;align-items:center;margin-top:8px}
+  .setgrid .label{margin:0}
+  .setgrid input[type=range]{width:100%;max-width:320px;accent-color:#ff7a2a}
 </style>
 </head>
 <body>
@@ -118,8 +121,7 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
       <button class="btn" id="idxBtn">Index (I)</button>
       <button class="btn" id="skinBtn">Skins (K)</button>
       <button class="btn" id="upBtnNav">Upgrades (U)</button>
-      <button class="btn" id="styleBtn">Style: Mixed</button>
-      <button class="btn" id="sensBtn">Camera: Normal</button>
+      <button class="btn" id="setBtn">Settings (Esc)</button>
       <button class="btn" id="muteBtn">Sound: On (M)</button>
       <button class="btn" id="netBtn">Multiplayer (P)</button>
       <button class="btn" id="codesBtn">Codes &amp; Save</button>
@@ -248,6 +250,28 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
       </div>
     </div>
 
+    <div class="ov" id="ovSet" hidden>
+      <div class="panel wide px" style="--edge:var(--line)">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <h2>Paused: Settings</h2>
+          <button class="btn primary" id="setClose">Resume (Esc)</button>
+        </div>
+        <div class="setgrid">
+          <p class="label">Graphics</p><div class="btns"><button class="btn" id="gfxFancy">Fancy</button><button class="btn" id="gfxFast">Fast</button></div>
+          <p class="label">Glow</p><div class="btns"><button class="btn" id="glowBtn">Glow: On</button></div>
+          <p class="label">Shape style</p><div class="btns"><button class="btn" id="styleBtn">Style: Mixed</button></div>
+          <p class="label">Camera speed</p><div class="btns"><button class="btn" id="sensBtn">Camera: Normal</button></div>
+          <p class="label">Sound volume</p><input type="range" id="volSfx" min="0" max="100" step="5">
+          <p class="label">Music volume</p><input type="range" id="volMus" min="0" max="100" step="5">
+          <p class="label">Text size</p><div class="btns"><button class="btn" id="txtBtn">Text: Normal</button></div>
+          <p class="label">Hints</p><div class="btns"><button class="btn" id="hintBtn">Control hints: On</button><button class="btn" id="tutBtn">Restart guide</button></div>
+        </div>
+        <p class="label" style="margin-top:12px">Controls</p>
+        <p class="body" style="font-size:.85rem;margin:0;line-height:1.5">Move WASD · Aim with the mouse · Shoot: click or hold · Zoom: wheel · Turn camera: right-drag, Z / C · Q pulse · Space dodge or leg ability · E buy, open, grab · R get in or out of your mech · B workshop · I index · K skins · U upgrades · L lock your base · P multiplayer · M sound · F / G / H fight, flee or yard a crate · Esc pause</p>
+        <div class="btns" style="margin-top:10px"><button class="btn" id="quitBtn">Back to title</button></div>
+      </div>
+    </div>
+
     <div class="ov" id="ovNet" hidden>
       <div class="panel wide px" style="--edge:var(--moss)">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
@@ -318,7 +342,7 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
 'use strict';
 const $ = id => document.getElementById(id);
 const cv = $('cv'), hud = $('hud'), ctx = hud.getContext('2d');
-const W = 640, H = 360;
+let W = 640, H = 360;   // HUD space; shrinks when Large text is on so everything draws bigger
 
 /* ================= config ================= */
 const DAY = 600, NIGHT = 60;            // 10 min day, 1 min night
@@ -700,7 +724,7 @@ const cam = {x:0,y:0};
 let AC = null, MASTER = null, NOISE = null;
 const sndLast = {};
 function audioInit(){
-  if (!AC){ try { AC = new (window.AudioContext || window.webkitAudioContext)(); MASTER = AC.createGain(); MASTER.gain.value = 0.55; MASTER.connect(AC.destination);
+  if (!AC){ try { AC = new (window.AudioContext || window.webkitAudioContext)(); MASTER = AC.createGain(); MASTER.gain.value = 0.55*(S.vol ?? 1); MASTER.connect(AC.destination);
     NOISE = AC.createBuffer(1, AC.sampleRate, AC.sampleRate); const d = NOISE.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1; } catch(e){ AC = null; } }
   if (AC && AC.state === 'suspended') AC.resume().catch(() => {});
 }
@@ -772,6 +796,7 @@ function ensureMissions(){
   while (S.missions.length < 3) S.missions.push(newMission(S.missions.map(m => m.t)));
 }
 function mission(t, n){
+  tutEvent(t);
   ensureMissions();
   S.missions.forEach((m, i) => {
     if (m.t !== t || m.have >= m.need) return;
@@ -1266,6 +1291,7 @@ const MECH = {x:HANGAR.x, y:HANGAR.y, face:Math.PI/2, hp:0, state:'none', repair
 const CS = () => P.inMech ? ST : PILOT;
 function ensureSave(){
   S.v = 2;   // save format version: bump it when the format changes, and upgrade older saves here
+  if (S.tut === undefined) S.tut = S.mechBuilt && (S.kills||0) >= 20 ? 6 : 0;   // veterans skip the guide
   if (S.mechBuilt === undefined) S.mechBuilt = SLOTS.every(sl => S.eq[sl] && partById(S.eq[sl]));
   if (!Array.isArray(S.pads) || S.pads.length !== 6) S.pads = [null,null,null,null,null,null];
   if (!Array.isArray(S.padCash) || S.padCash.length !== 6) S.padCash = [0,0,0,0,0,0];
@@ -1468,7 +1494,7 @@ $('tSkill').addEventListener('click', () => ability());
 $('tBay').addEventListener('click', () => toggleBay());
 
 /* ================= overlays ================= */
-const OVS = ['ovStart','ovChoice','ovBay','ovDead','ovNew','ovIndex','ovSkins','ovUp','ovCodes','ovGame','ovNet'];
+const OVS = ['ovStart','ovChoice','ovBay','ovDead','ovNew','ovIndex','ovSkins','ovUp','ovCodes','ovGame','ovNet','ovSet'];
 const UPGRADES = [
   {id:'cspd',  n:'Conveyor speed',     max:10, cost:l => Math.round(200*Math.pow(1.8,l)), d:l => 'A new part every '+(3.2*Math.pow(0.88,l)).toFixed(1)+'s'},
   {id:'cluck', n:'Conveyor luck',      max:10, cost:l => Math.round(300*Math.pow(2,l)),   d:l => 'Rarer parts on the belt (luck '+l+')'},
@@ -1698,7 +1724,7 @@ function mgStart(id){
     draw(); mgI(() => { if (holding){ fuel = Math.min(1, fuel + 0.012 + tries*0.003); const f = $('fl'); if (f) f.style.height = (fuel*100)+'%'; if (fuel >= 1){ holding = false; release(); } } }, 16);
   }
 }
-function toggleMute(){ S.muted = !S.muted; $('muteBtn').textContent = 'Sound: '+(S.muted ? 'Off' : 'On')+' (M)'; save(); if (!S.muted){ audioInit(); sfx('click'); } }
+function toggleMute(){ S.muted = !S.muted; $('muteBtn').textContent = 'Sound: '+(S.muted ? 'Off' : 'On')+' (M)'; musicVolume(); save(); if (!S.muted){ audioInit(); sfx('click'); } }
 $('muteBtn').addEventListener('click', toggleMute);
 $('muteBtn').textContent = 'Sound: '+(S.muted ? 'Off' : 'On')+' (M)';
 $('skinClose').addEventListener('click', () => toggleSkins(false));
@@ -3733,8 +3759,14 @@ function drawMotes(bt){
     sph(bt, x, y, hh, sz, sz, sz, 0, night ? (h2 > 0.5 ? '#d8ff7a' : '#fff3a0') : (h2 > 0.6 ? acc : '#ffffff'), 1);
   }
 }
+let VIGK = 0, HUDK = 1;
 function drawHUD(){
-  ctx.setTransform(2,0,0,2,0,0);
+  const k = S.bigText ? 1.25 : 1; W = 640/k; H = 360/k; HUDK = k;
+  if (VIGK !== k){ VIGNETTE = null; VIGK = k; }
+  try { drawHUDInner(); tutHUD(); } finally { W = 640; H = 360; }
+}
+function drawHUDInner(){
+  ctx.setTransform(2*HUDK,0,0,2*HUDK,0,0);
   ctx.clearRect(0,0,W,H);
   if (!VIGNETTE){ VIGNETTE = ctx.createRadialGradient(W/2, H/2, H*0.42, W/2, H/2, H*0.98); VIGNETTE.addColorStop(0, 'rgba(0,0,0,0)'); VIGNETTE.addColorStop(1, 'rgba(4,8,20,.42)'); }
   ctx.fillStyle = VIGNETTE; ctx.fillRect(0, 0, W, H);
@@ -3808,7 +3840,7 @@ function drawHUD(){
   if (!isTouch && !paused() && !P.dead){
     if (shiftLock){ px(W-104, H-20, 98, 14, 'rgba(8,12,24,.58)'); text('SHIFT LOCK ON', W-55, H-17, '#5fe0ff', 8, 'center');
       if (!locked) text('MOVE MOUSE LEFT / RIGHT TO TURN', W/2, H-14, '#c9d2e3', 8, 'center'); }
-    else if (clock < 60) text('SHIFT: SHIFT LOCK   RIGHT-DRAG, Z/C OR 2-FINGER SWIPE: TURN', W/2+70, H-14, '#c9d2e3', 8, 'center');
+    else if (clock < 60 && S.hints !== false) text('SHIFT: SHIFT LOCK   RIGHT-DRAG, Z/C OR 2-FINGER SWIPE: TURN', W/2+70, H-14, '#c9d2e3', 8, 'center');
   }
   if (stick){
     ctx.globalAlpha = 0.35; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
@@ -3828,7 +3860,7 @@ function drawHUD(){
   }
   // arrow to the workshop while you still need it, or when you're at base
   const dW = Math.hypot(HANGAR.x-P.x, HANGAR.y-P.y);
-  if (!flee && !P.dead && !P.inMech && dW > 120 && (!S.mechBuilt || (!zoneAt(P.x,P.y) && P.y > -150))){
+  if (!flee && !P.dead && !P.inMech && dW > 120 && (S.tut ?? 0) >= TUT.length && (!S.mechBuilt || (!zoneAt(P.x,P.y) && P.y > -150))){
     const a = Math.atan2(HANGAR.y-P.y, HANGAR.x-P.x) - camYaw;
     const ax = W/2 + Math.sin(a)*150, ay = H/2 - 6 - Math.cos(a)*95;
     ctx.save(); ctx.translate(ax, ay); ctx.rotate(a); ctx.fillStyle = '#5fe0ff';
@@ -4066,6 +4098,91 @@ $('netCode').addEventListener('keydown', e => { if (e.key === 'Enter') netJoin($
 $('netLeave').addEventListener('click', () => netLeave('You left the game.'));
 $('netCopy').addEventListener('click', () => { try { navigator.clipboard.writeText(NET.code).then(() => { $('netCopy').textContent = 'Copied!'; setTimeout(() => $('netCopy').textContent = 'Copy code', 1500); }); } catch(e){} });
 renderNet();
+// ---------- music: a small looping track per zone that picks up in fights ----------
+// Each zone has its own key and mood; layers fade in with intensity (0 calm, 1 out in a zone, 2 fighting, 3 boss).
+const MUS = {g:null, next:0, step:0, int:0, zone:-1};
+const MUS_KEYS = [[57,'min'], [62,'dor'], [55,'min'], [64,'phr'], [60,'dor'], [52,'phr'], [59,'min'], [65,'maj'], [60,'maj']];  // base, zones 1..8
+const MODE = {maj:[0,2,4,5,7,9,11], min:[0,2,3,5,7,8,10], dor:[0,2,3,5,7,9,10], phr:[0,1,3,5,7,8,10]};
+const PROG = [0, 5, 3, 4];   // chord roots by scale degree, one per bar
+const midi = n => 440*Math.pow(2, (n-69)/12);
+function musicVolume(){ if (MUS.g) MUS.g.gain.value = S.muted ? 0 : 0.3*(S.mvol ?? 0.6); }
+function mNote(f, t, dur, type, vol, attack){
+  const o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + (attack||0.01)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(MUS.g); o.start(t); o.stop(t + dur + 0.05);
+}
+function mHit(t, dur, vol, hp){ const src = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain(); src.buffer = NOISE; f.type = hp ? 'highpass' : 'lowpass'; f.frequency.value = hp ? 7000 : 140;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); src.connect(f); f.connect(g); g.connect(MUS.g); src.start(t); src.stop(t + dur + 0.02); }
+function musicTick(){
+  if (!AC || AC.state !== 'running') return;
+  if (!MUS.g){ MUS.g = AC.createGain(); MUS.g.connect(MASTER); musicVolume(); MUS.next = AC.currentTime + 0.1; }
+  if (S.muted || (S.mvol ?? 0.6) <= 0) { MUS.next = AC.currentTime + 0.1; return; }
+  const zi = zoneAt(P.x, P.y), boss = arenaAt(P.x, P.y), near = enemies.some(e => !e.dead && Math.hypot(e.x-P.x, e.y-P.y) < 500);
+  MUS.int = boss ? 3 : (wave || near) ? 2 : zi ? 1 : 0; MUS.zone = boss ? boss : zi;
+  const [root, mode] = MUS_KEYS[MUS.zone] || MUS_KEYS[0], sc = MODE[mode], deg = d => root + sc[((d % 7) + 7) % 7] + 12*Math.floor(d/7);
+  const spb = (MUS.int >= 2 ? 60/128 : 60/96)/4;   // a 16th note
+  while (MUS.next < AC.currentTime + 0.25){
+    const t = MUS.next, st = MUS.step % 16, bar = Math.floor(MUS.step/16) % 4, cr = PROG[bar];
+    if (st === 0){ for (const d of [0, 2, 4]) mNote(midi(deg(cr + d)), t, spb*16, 'triangle', 0.035, 0.4); }   // pad chord
+    if (st === 0 || st === 8 || (MUS.int >= 2 && (st === 6 || st === 14))) mNote(midi(deg(cr) - 24), t, spb*(MUS.int >= 2 ? 2 : 6), 'sawtooth', MUS.int >= 2 ? 0.05 : 0.03, 0.01);   // bass
+    if (MUS.int >= 1 && st % 2 === 0){ const arp = [0, 2, 4, 7, 4, 2, 4, 2][(st/2) % 8]; if (MUS.int >= 2 || st % 4 === 0) mNote(midi(deg(cr + arp) + 12), t, spb*1.6, 'square', 0.012, 0.005); }   // arpeggio
+    if (MUS.int >= 2){ if (st % 4 === 0) mHit(t, 0.18, 0.5, false); if (st % 2 === 1) mHit(t, 0.04, 0.08, true); if (MUS.int >= 3 && (st === 4 || st === 12)) mHit(t, 0.12, 0.25, true); }   // drums
+    MUS.next += spb; MUS.step++;
+  }
+}
+// ---------- settings + pause ----------
+function renderSet(){
+  $('gfxFancy').classList.toggle('primary', !GFX.fast); $('gfxFast').classList.toggle('primary', GFX.fast);
+  $('glowBtn').textContent = 'Glow: ' + (S.glow === false ? 'Off' : 'On') + (GFX.fast ? ' (off in Fast)' : '');
+  $('txtBtn').textContent = 'Text: ' + (S.bigText ? 'Large' : 'Normal');
+  $('hintBtn').textContent = 'Control hints: ' + (S.hints === false ? 'Off' : 'On');
+  $('volSfx').value = Math.round((S.vol ?? 1)*100); $('volMus').value = Math.round((S.mvol ?? 0.6)*100);
+}
+function toggleSet(force){ const on = force === undefined ? $('ovSet').hidden : force; if (on) renderSet(); showOv('ovSet', on); }
+$('setBtn').addEventListener('click', () => toggleSet());
+$('setClose').addEventListener('click', () => toggleSet(false));
+$('gfxFancy').addEventListener('click', () => { S.gfx = 'fancy'; S.gfxSet = true; applyGfx(); save(); renderSet(); });
+$('gfxFast').addEventListener('click', () => { S.gfx = 'fast'; S.gfxSet = true; applyGfx(); save(); renderSet(); });
+$('glowBtn').addEventListener('click', () => { S.glow = S.glow === false; applyGfx(); save(); renderSet(); });
+$('txtBtn').addEventListener('click', () => { S.bigText = !S.bigText; save(); renderSet(); });
+$('hintBtn').addEventListener('click', () => { S.hints = S.hints === false; save(); renderSet(); });
+$('tutBtn').addEventListener('click', () => { S.tut = 0; S.tutK = 0; save(); toggleSet(false); note('Guide restarted. Follow NEXT at the top of the screen.', '#ffcf3a'); });
+$('volSfx').addEventListener('input', () => { S.vol = $('volSfx').value/100; if (MASTER) MASTER.gain.value = 0.55*S.vol; save(); });
+$('volMus').addEventListener('input', () => { S.mvol = $('volMus').value/100; musicVolume(); save(); });
+$('quitBtn').addEventListener('click', () => { toggleSet(false); save(); showOv('ovStart', true); });
+addEventListener('keydown', e => {
+  if (e.code !== 'Escape' || e.target.tagName === 'INPUT') return;
+  if (!$('ovSet').hidden) toggleSet(false);
+  else if (!OVS.some(id => id !== 'ovSet' && !$(id).hidden)) toggleSet(true);
+});
+// ---------- guided start: six steps with a NEXT line and an arrow ----------
+const TUT = [
+  {t:'Buy a part off the conveyor: stand by the belt and press E', ev:'buy', at:() => ({x:0, y:(BELT_Y0+BELT_Y1)/2}), pay:40},
+  {t:'Fill all 6 slots and build your mech at the workshop (B)', done:() => S.mechBuilt, at:() => HANGAR, pay:80},
+  {t:'Climb into your mech: walk up to it and press R', done:() => P.inMech, at:() => MECH.state === 'parked' ? MECH : null, pay:40},
+  {t:'Head north over the bridge and open a crate (hold E)', ev:'crate', at:() => P.y > -150 ? {x:0, y:-300} : null, pay:120},
+  {t:"Send a crate to your yard (H), then open it when it's ready", ev:'yard', at:() => !zoneAt(P.x,P.y) && P.y > -150 ? YARD[0] : null, pay:120},
+  {t:'Defeat 5 bots', ev:'kill', need:5, pay:150}];
+function tutEvent(t){
+  const st = TUT[S.tut ?? 0]; if (!st || st.ev !== t) return;
+  S.tutK = (S.tutK||0) + 1; if (S.tutK >= (st.need||1)) tutNext();
+}
+function tutNext(){
+  const st = TUT[S.tut ?? 0]; if (!st) return;
+  S.scrap += st.pay; S.tut = (S.tut ?? 0) + 1; S.tutK = 0; sfx('chime');
+  note('Guide step done! +' + st.pay + ' scrap' + (S.tut >= TUT.length ? '. You know the basics, pilot. Good luck out there!' : ''), '#ffcf3a'); save();
+}
+function tutTick(){ const st = TUT[S.tut ?? 0]; if (st && st.done && st.done()) tutNext(); }
+function tutHUD(){
+  const st = TUT[S.tut ?? 0]; if (!st || P.dead) return;
+  const msg = 'NEXT (' + ((S.tut ?? 0)+1) + '/' + TUT.length + '): ' + st.t + (st.need ? '  ' + (S.tutK||0) + '/' + st.need : '');
+  const w = Math.min(W - 20, msg.length*5.2 + 16), y0 = H - 40; px(W/2 - w/2, y0, w, 13, 'rgba(8,12,24,.75)'); text(msg, W/2, y0 + 3, '#ffcf3a', 8, 'center');
+  const tg = st.at && st.at(); if (!tg) return;
+  const d = Math.hypot(tg.x-P.x, tg.y-P.y); if (d < 90) return;
+  const a = Math.atan2(tg.y-P.y, tg.x-P.x) - camYaw, ax = W/2 + Math.sin(a)*120, ay = H/2 - 6 - Math.cos(a)*80;
+  ctx.save(); ctx.translate(ax, ay); ctx.rotate(a); ctx.fillStyle = '#ffcf3a'; ctx.beginPath(); ctx.moveTo(0,-9); ctx.lineTo(7,5); ctx.lineTo(-7,5); ctx.closePath(); ctx.fill(); ctx.restore();
+  text(Math.round(d/9) + 'M', ax, ay+8, '#ffcf3a', 8, 'center');
+}
 // ---------- drawing the friend ----------
 function drawRemoteDyn(bt){
   const R = NET.R; if (!R || !R.seen || R.dead || !R.look) return;
@@ -4202,7 +4319,7 @@ function frame(now){
   flashT = Math.max(0, flashT - dt);
   hitMark = hitMark > 0 ? Math.max(0, hitMark - dt) : hitMark < 0 ? Math.min(0, hitMark + dt) : 0;
   dmgFlash = Math.max(0, dmgFlash - dt*1.5); missionFlash = Math.max(0, missionFlash - dt);
-  netTick(dt); if (!paused()){ animTick(dt); gfxWatch(dt); }
+  netTick(dt); musicTick(); if (!paused()){ animTick(dt); gfxWatch(dt); tutTick(); }
   render3D();
   drawHUD();
   chipT -= dt;
