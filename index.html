@@ -824,7 +824,11 @@ const MISSIONS = [
   {t:'wave',  text:'Clear a fight wave',        need:z => 1},
   {t:'boss',  text:'Defeat a zone boss',        need:z => 1},
   {t:'yard',  text:'Open a crate in your yard', need:z => 1},
-  {t:'night', text:'Defeat bots at night',      need:z => 4+z*2}];
+  {t:'night', text:'Defeat bots at night',      need:z => 4+z*2},
+  {t:'streak', text:'Get a triple kill',         need:z => 1},
+  {t:'elite', text:'Defeat special bots', need:z => 2+Math.floor(z/2)},
+  {t:'event', text:'Win a meteor or golden bot event', need:z => 1},
+  {t:'airkill', text:'Defeat bots while in the air', need:z => 3}];
 function newMission(skip){
   const z = S.maxArea || 1;
   const pool = MISSIONS.filter(m => !skip.includes(m.t));
@@ -1121,6 +1125,8 @@ function killEnemy(e){
   }
   if (e.mod === 'Volatile') volatileBurst(e);
   if (e.golden) goldenDown(e);
+  if (e.elite || e.role) mission('elite');
+  if ((P.jh||0) > 4 || P.fly) mission('airkill');
   if (e.elite){ const p = newPart(Math.min(NR, rollRarity(e.zone||e.tier) + 1), null, e.zone||e.tier); giveLoot([p], 40*e.tier*e.tier, 'ELITE DESTROYED! Bonus loot:'); }
   if (e.mini){ minis[e.zone] = {at: clock + 180}; const z = e.zone; addXp(120*z); flash('#ff9a2e', 0.4);
     giveLoot([newPart(Math.min(NR, rollRarity(z) + 1), null, z), newPart(Math.min(NR, rollRarity(z) + 2), null, z)], 150*z*z, 'MINI-BOSS DOWN: '+e.name+'! It comes back in 3 minutes.'); }
@@ -1165,7 +1171,7 @@ function eventTick(dt){
         E.rocks.push({x, y, t:0, land:1.6, done:false}); sfx('warn'); }
       for (const m of E.rocks) if (!m.done){ m.t += dt; if (m.t >= m.land){ m.done = true; meteorHit(m, E.z); } }
       E.rocks = E.rocks.filter(m => !m.done || m.t < m.land + 0.1);
-      if (E.left <= 0 && !E.rocks.length){ S.meteors = (S.meteors||0) + 1; endEvent('The meteor shower is over.'); }
+      if (E.left <= 0 && !E.rocks.length){ S.meteors = (S.meteors||0) + 1; mission('event'); endEvent('The meteor shower is over.'); }
     } else if (E.kind === 'golden'){
       const g = E.bot; if (!g || g.dead){ endEvent(null); return; }
       if (E.t > 40){ despawn(g); endEvent('The golden bot got away!'); return; }
@@ -1197,7 +1203,7 @@ function meteorHit(m, z){
   if (R() < 0.22){ const p = newPart(Math.min(NR, rollRarity(z) + 1), null, z); giveLoot([p], 0, 'A meteor had a part inside!'); }
 }
 function goldenDown(e){
-  const z = e.zone, sc = Math.round(150*z*z*rbScrap()); EV.cur = null; S.goldCaught = (S.goldCaught||0) + 1;
+  const z = e.zone, sc = Math.round(150*z*z*rbScrap()); EV.cur = null; S.goldCaught = (S.goldCaught||0) + 1; mission('event');
   flash('#ffcf3a', 0.5); hitStop = Math.max(hitStop, 0.1); spillCoins(e.x, e.y, 30);
   giveLoot([newPart(Math.min(NR, rollRarity(z) + 2), null, z)], sc, 'JACKPOT! You caught the golden bot:');
 }
@@ -1222,7 +1228,7 @@ function killStreak(e){
   streak = clock < streakT ? streak + 1 : 1; streakT = clock + 3.2; S.bestStreak = Math.max(S.bestStreak||0, streak);
   if (streak < 2) return;
   const nm = STREAK[Math.min(streak, STREAK.length-1)], bonus = Math.round(5*streak*streak*(e.tier||1)*rbScrap());
-  S.scrap += bonus; streakShow = {nm, t:1.6, bonus, n:streak}; sfx('streak');
+  S.scrap += bonus; streakShow = {nm, t:1.6, bonus, n:streak}; sfx('streak'); if (streak === 3) mission('streak');
   if (streak >= 5){ flash('#ffd23f', 0.25); hitStop = Math.max(hitStop, 0.05); }
 }
 function streakHUD(dt){
