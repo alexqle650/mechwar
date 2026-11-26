@@ -811,6 +811,7 @@ const SOUNDS = {
   open:    [0.2,  () => { noiz(0.2, 0.1, 2000, 500); tone(400, 0.3, 'triangle', 0.05, 1200); }],
   click:   [0.03, () => tone(700, 0.03, 'square', 0.03)],
   warn:    [0.3,  () => tone(440, 0.5, 'sawtooth', 0.06, 220)],
+  zap:     [0.15, () => { tone(900, 0.18, 'sawtooth', 0.04, 2400); tone(1400, 0.12, 'square', 0.03, 600, 0.05); noiz(0.15, 0.05, 7000, 2000); }],
   error:   [0.2,  () => { tone(220, 0.12, 'square', 0.04); tone(165, 0.18, 'square', 0.04, 0, 0.1); }],
   streak:  [0.3,  () => { [659,880,1175].forEach((f,i) => tone(f, 0.14, 'square', 0.045, 0, i*0.06)); noiz(0.3, 0.06, 6000, 1500); }]};
 let SJIT = 1;
@@ -982,7 +983,7 @@ function spawnBoss(i){
   const e = makeEnemy('boss', i, a.x, a.y - 150, {home:{x:a.x, y:a.y}, hpm:40, zone:i});
   e.spd = 60; e.name = BOSS_NAMES[i-1]; e.zone = i; e.slamT = 5; e.sumT = 10; e.warn = 0; e.idle = 0;
   B.alive = true; B.e = e; B.away = 0;
-  note('BOSS: '+e.name+' has entered the arena!', '#ff5d4a'); sfx('roar'); shake = 4;
+  note('BOSS: '+e.name+' has entered the arena! It '+BOSS_ATK_TXT[i]+'. Watch for red circles.', '#ff5d4a'); sfx('roar'); shake = 4;
 }
 function bossDown(e){
   S.bossKills = (S.bossKills||0) + 1;
@@ -1025,6 +1026,35 @@ function updateBosses(dt){
   for (let i=1;i<=NZ;i++){ const B = bosses[i]; if (B.alive && B.e && !B.e.dead && ai === i) bossFocus = B.e; }
   if (!bossFocus) for (const e of enemies) if (e.mini && !e.dead && dist(e,P) < 700){ bossFocus = e; break; }
 }
+// each boss has its own signature attack, fitting its weapon (bullets, lobbed shots with warning circles, spirals, homing orbs)
+const BOSS_ATK = [null, 'junk', 'vines', 'spikes', 'lances', 'spiral', 'lava', 'orbs', 'rockets'];
+const BOSS_ATK_TXT = [null, 'tosses junk', 'sweeps vines', 'sends rock spikes', 'throws ice lances', 'spins a laser spiral', 'rains lava', 'fires void orbs', 'fires a rocket barrage'];
+function bossLob(e, x, y, land, r, dmgK){ (e.lobs || (e.lobs = [])).push({x, y, t:0, land, r, dmg:e.dmg*dmgK*(isNight?1.5:1)}); }
+function bossSignature(e, dt, rage){
+  const B = BOSS_MECH[e.zone] || BOSS_MECH[1], col = B.glow, nd = isNight ? 1.5 : 1, kind = BOSS_ATK[e.zone] || 'junk';
+  const shoot = (a, sp, k, o2) => bullets.push(Object.assign({x:e.x+Math.cos(a)*e.r, y:e.y+Math.sin(a)*e.r, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:3.2, dmg:e.dmg*k*nd, from:'e', h:e.sc*12, src:e, col, r:7}, o2||{}));
+  if (e.lobs){ for (const L of e.lobs){ L.t += dt; if (L.t >= L.land && !L.done){ L.done = true;
+      burst(L.x, L.y, col, 22, 220); burst(L.x, L.y, '#555', 8, 100, true); ring(L.x, L.y, col, L.r); sfx('boom'); shake = Math.max(shake, 2);
+      if (!P.dead && Math.hypot(P.x - L.x, P.y - L.y) < L.r + P.r) hurtPlayer(L.dmg, e); } }
+    e.lobs = e.lobs.filter(L => !L.done || L.t < L.land + 0.05); }
+  if (e.spT > 0){ e.spT -= dt; e.spK = (e.spK||0) - dt; if (e.spK <= 0){ e.spK = 0.07; e.spA = (e.spA||0) + 0.33; for (const o2 of [0, Math.PI]) shoot(e.spA + o2, 230, 0.7); } }
+  if (e.fireT > 0 || e.warn > 0) return;
+  e.fireT = (rage ? 1.3 : 2.1) + (kind === 'spiral' || kind === 'rockets' || kind === 'lava' ? 0.8 : 0);
+  if (kind === 'junk'){ for (let k=0;k<(rage ? 5 : 3);k++){ const a = R()*6.283, r = k ? rr(30, 140) : 0; bossLob(e, P.x + Math.cos(a)*r, P.y + Math.sin(a)*r, 1.3, 55, 1.6); } sfx('rocket'); }
+  if (kind === 'vines'){ const n = rage ? 17 : 13; for (let k=0;k<n;k++) shoot(e.ang + (k-(n-1)/2)*0.15, 250, 1); sfx('rocket'); }
+  if (kind === 'spikes'){ const a = e.ang, n = rage ? 9 : 7; for (let k=0;k<n;k++){ const d = e.r + 40 + k*70; bossLob(e, e.x + Math.cos(a)*d, e.y + Math.sin(a)*d, 0.5 + k*0.14, 42, 1.4); } sfx('smash'); }
+  if (kind === 'lances'){ for (const sp of [-0.12, 0, 0.12]) shoot(e.ang + sp, 520, 1.8, {r:9, col:'#dff6ff', life:2.2}); if (rage) for (const sp of [-0.35, 0.35]) shoot(e.ang + sp, 480, 1.4, {r:8, col:'#dff6ff'}); sfx('rail'); }
+  if (kind === 'spiral'){ e.spT = rage ? 2.2 : 1.5; e.spA = e.ang; sfx('zap'); }
+  if (kind === 'lava'){ for (let k=0;k<(rage ? 9 : 6);k++){ const a = R()*6.283, r = rr(0, 220); bossLob(e, P.x + Math.cos(a)*r, P.y + Math.sin(a)*r, 1 + R()*0.8, 50, 1.3); } sfx('boom'); }
+  if (kind === 'orbs'){ for (let k=0;k<(rage ? 6 : 4);k++) shoot(e.ang + (k - 1.5)*0.6, 150, 1.4, {homing:1.3, life:5, r:10}); sfx('zap'); }
+  if (kind === 'rockets'){ const n = rage ? 10 : 8; for (let k=0;k<n;k++){ const a = k/n*6.283, r = k%2 ? 90 : 160; bossLob(e, P.x + Math.cos(a)*r, P.y + Math.sin(a)*r, 1.2 + k*0.06, 48, 1.3); } bossLob(e, P.x, P.y, 1.9, 60, 1.6); sfx('rocket'); }
+}
+function drawBossLobs(bt, e){
+  if (!e.lobs) return; const col = (BOSS_MECH[e.zone] || BOSS_MECH[1]).glow;
+  for (const L of e.lobs){ if (L.done) continue; const k = Math.min(1, L.t/L.land), on = Math.floor(clock*12)%2 === 0;
+    cyl(ALPHA, L.x, L.y, 0.6, L.r*2*k, 1, L.r*2*k, 0, '#ff3b3b', 5); if (on) cyl(bt, L.x, L.y, 0.4, 6, 1, 6, 0, '#ff3b3b', 1);
+    const hh = (1-k)*420 + 8; sph(bt, L.x, L.y, hh, 12, 12, 12, 0, col, 1); }
+}
 function bossAI(e, dt){
   const c = e.home, inArena = !P.dead && arenaAt(P.x, P.y) === e.zone, dp = dist(e,P), rage = e.hp < e.max/2;
   let tx = null, ty = null;
@@ -1046,13 +1076,7 @@ function bossAI(e, dt){
   }
   if (e.phase2){ e.ringT -= dt; if (e.ringT <= 0 && e.warn <= 0){ e.ringT = 3.5; const n = 18, off = clock;
     for (let k=0;k<n;k++){ const a = off + k*Math.PI*2/n, sp = 200 + e.tier*10; bullets.push({x:e.x+Math.cos(a)*e.r, y:e.y+Math.sin(a)*e.r, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:3.5, dmg:e.dmg*0.8*(isNight?1.5:1), from:'e', h:e.sc*8, src:e, col:'#ff3b3b', r:6}); } sfx('rocket'); } }
-  if (e.fireT <= 0 && e.warn <= 0){
-    e.fireT = rage ? 1.2 : 2;
-    const n = rage ? 9 : 7;
-    for (let k=0;k<n;k++){ const a = e.ang + (k-(n-1)/2)*0.11, sp = 280 + e.tier*14;
-      bullets.push({x:e.x+Math.cos(a)*e.r, y:e.y+Math.sin(a)*e.r, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:3, dmg:e.dmg*1.2*(isNight?1.5:1), from:'e', h:e.sc*12, src:e, col:'#ff5d4a', r:7}); }
-    sfx('rocket');
-  }
+  bossSignature(e, dt, rage);
   const SR = e.r + 200;
   if (e.slamT <= 0 && e.warn <= 0){ e.warn = 1.1; parts.push({x:e.x, y:e.y, h:2, vh:0, vx:0, vy:0, life:1.1, max:1.1, col:'#ff3b3b', ring:SR}); sfx('warn'); }
   if (e.warn > 0){
@@ -2414,6 +2438,9 @@ function updatePlayer(dt){
 function segDist(px, py, ax, ay, bx, by){ const dx = bx-ax, dy = by-ay, L = dx*dx+dy*dy; const t = L ? clamp(((px-ax)*dx+(py-ay)*dy)/L, 0, 1) : 0; return Math.hypot(px-ax-dx*t, py-ay-dy*t); }
 function updateBullets(dt){
   for (const b of bullets){
+    if (b.homing && !P.dead){ const want = Math.atan2(P.y-b.y, P.x-b.x), cur = Math.atan2(b.vy, b.vx), sp = Math.hypot(b.vx, b.vy);
+      let dA = want - cur; while (dA > Math.PI) dA -= 6.283; while (dA < -Math.PI) dA += 6.283; const na = cur + clamp(dA, -b.homing*dt, b.homing*dt);
+      b.vx = Math.cos(na)*sp; b.vy = Math.sin(na)*sp; }
     if (b.mortar){ const M = b.mortar; M.t += dt; const q = Math.min(1, M.t/M.T);
       b.x = M.sx + (M.tx-M.sx)*q; b.y = M.sy + (M.ty-M.sy)*q; b.h = M.sh + Math.sin(q*Math.PI)*140;
       if (R() < 0.5) parts.push({x:b.x,y:b.y,h:b.h,vh:5,vx:0,vy:0,life:0.4,max:0.4,col:'#c9d2e3',s:2});
@@ -3664,6 +3691,7 @@ function drawEnemyDyn(bt, e){
     if (e.role === 'bomber'){ const on = Math.floor(clock*(dist(e,P) < 200 ? 14 : 5))%2 === 0; sph(bt, e.x, e.y, top, 3.6*e.sc, 3.6*e.sc, 3.6*e.sc, 0, on ? '#ff3b3b' : '#5a1a10', on ? 1 : 0); }
     if (e.role === 'sniper' && e.fireT < 0.7 && dist(e,P) < 700){ const on = Math.floor(clock*16)%2 === 0; sph(bt, e.x, e.y, top - 6*e.sc, 2.4*e.sc, 2.4*e.sc, 2.4*e.sc, 0, on ? '#ff3b3b' : '#ffffff', 1); } }
 }
+const ZONE1_KIT = {Head:1, Torso:1, Arms:1, Legs:1};   // Scrapyard bots wear the Scrapyard kit
 function drawEnemyBody(bt, e){
   const boss = e.kind === 'boss', zone = e.zone || e.tier || 1;
   if (boss){ cyl(ALPHA, e.x, e.y, 0.3, 60*e.sc, 1, 60*e.sc, 0, e.warn > 0 ? '#ff3b3b' : ZONES[zone-1].acc, 5); }
@@ -3672,7 +3700,7 @@ function drawEnemyBody(bt, e){
   if (zone >= 2 && CREATURE[zone]){ drawCreature(bt, e, zone, boss); return; }
   const body = boss ? mix('#2a2d36', ZONES[zone-1].acc, e.hp < e.max/2 ? 0.35 : 0.18) : e.kind==='chaser' ? '#4a2340' : e.kind==='wave' ? '#5c5236' : '#4a4f57';
   const eye = boss ? '#ff3b3b' : e.kind==='chaser' ? '#ff4fd0' : e.kind==='wave' ? '#ffd23f' : '#ffb347';
-  rig(bt, e.x, e.y, e.ang, {s:e.sc, body, dark:'#1c1f24', head:shade(body,1.12), visor:eye, light:eye, kinds:{Head:'Optic Helm'},
+  rig(bt, e.x, e.y, e.ang, {s:e.sc, body, dark:'#1c1f24', head:shade(body,1.12), visor:eye, light:eye, kinds:{Head:'Optic Helm'}, zones:ZONE1_KIT,
     gun:{kind:ENEMY_GUN[e.kind], aim:e.ang, col:eye, tier:1}, walk:e.walk, amp:e.amp||0, lean:(e.amp||0)*0.45, spikes:boss, stripes:e.kind==='wave', hit:e.hitT > 0, antenna:boss, enemyLook:true, tiers:(() => { const t = boss ? 8 : Math.min(7, 1 + Math.ceil(zone*0.8)); return {Head:t, Torso:t, Arms:t, Legs:t, Core:t, Weapon:t}; })(), armor: boss ? {Arms:ZONES[zone-1].acc, Torso:ZONES[zone-1].acc, Legs:shade(ZONES[zone-1].acc,0.7)} : undefined});
 }
 // bosses are giant mechs built like yours: each has its own design, parts, weapon and colours
@@ -3690,7 +3718,9 @@ function drawBossMech(bt, e, zone){
   const gl = fin ? '#ff3b3b' : rage ? mix(B.glow, '#ff3b3b', 0.4) : B.glow, d = B.d;
   const T = {Head:d, Torso:d, Arms:d, Legs:d, Core:d, Weapon:d}, s = e.sc*0.66;
   if (B.k.Legs === 'Jet Wings' || B.k.Legs === 'Hover Legs') shadow(e.x, e.y, 30*s);
-  rig(bt, e.x, e.y, e.ang, {s, body:B.body, dark:'#16181e', head:shade(B.body, 1.1), visor:gl, light:gl, glow:gl, kinds:B.k, tiers:T,
+  drawBossLobs(bt, e);
+  const Zs = {Head:zone, Torso:zone, Arms:zone, Legs:zone, Core:zone, Weapon:zone};   // bosses wear their zone's area kit
+  rig(bt, e.x, e.y, e.ang, {s, body:B.body, dark:'#16181e', head:shade(B.body, 1.1), visor:gl, light:gl, glow:gl, kinds:B.k, tiers:T, zones:Zs,
     gun:{kind:B.w, aim:e.ang, col:gl, tier:d, flash:e.fireFx > 0}, walk:e.walk, amp:e.amp||0, lean:(e.amp||0)*0.35 + (e.charge > 0 ? 0.35 : 0),
     spikes:true, hit:e.hitT > 0, antenna:zone === 1, lift:(B.k.Legs === 'Jet Wings' ? 22 : 0)*s/1.45, recoil:e.slamT !== undefined && e.warn > 0 ? 0.6 : 0});
   // boss crest: a glowing ring over the head, brighter in each phase
