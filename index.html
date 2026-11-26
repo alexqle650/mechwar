@@ -267,7 +267,7 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
           <p class="label">Hints</p><div class="btns"><button class="btn" id="hintBtn">Control hints: On</button><button class="btn" id="tutBtn">Restart guide</button></div>
         </div>
         <p class="label" style="margin-top:12px">Controls</p>
-        <p class="body" style="font-size:.85rem;margin:0;line-height:1.5">Move WASD · Aim with the mouse · Shoot: click or hold · Zoom: wheel · Turn camera: right-drag, Z / C · Q pulse · Space dodge or leg ability · E buy, open, grab · R get in or out of your mech · B workshop · I index · K skins · U upgrades · L lock your base · P multiplayer · M sound · F / G / H fight, flee or yard a crate · Esc pause</p>
+        <p class="body" style="font-size:.85rem;margin:0;line-height:1.5">Move WASD · Aim with the mouse · Shoot: click or hold · Zoom: wheel · Turn camera: right-drag, Z / C · Q pulse · Space dodge or leg ability · E buy, open, grab · R get in or out of your mech · B workshop · I index · K skins · U upgrades · L lock your base · P multiplayer · M sound · N world map · F / G / H fight, flee or yard a crate · Esc pause</p>
         <div class="btns" style="margin-top:10px"><button class="btn" id="quitBtn">Back to title</button></div>
       </div>
     </div>
@@ -1407,6 +1407,7 @@ addEventListener('keydown', e => {
   if (e.code==='KeyK') toggleSkins();
   if (e.code==='KeyU') toggleUp();
   if (e.code==='KeyM') toggleMute();
+  if (e.code==='KeyN') BIGMAP = !BIGMAP;
   if (e.code==='KeyP') toggleNet();
   if (e.code==='KeyF') choose(true);
   if (e.code==='KeyG') choose(false);
@@ -3689,50 +3690,73 @@ function labels(){
   netLabels();
   for (const f of floaters){ const p = proj(f.x, f.h, f.y); if (!p) continue; ctx.globalAlpha = Math.min(1,f.life*2); text(f.text, p.x, p.y, f.col, f.size||8, 'center'); ctx.globalAlpha = 1; }
 }
-function drawMinimap(){
-  const S2 = 92, mx = W-S2-6, my = 6;
-  const ai = arenaAt(P.x,P.y);
-  if (ai){ const a = ARENA(ai), sc = S2/(a.r*2+200), X = x => mx+S2/2+(x-a.x)*sc, Y = y => my+S2/2+(y-a.y)*sc;
-    px(mx-2,my-2,S2+4,S2+14,'#0b0e15'); px(mx,my,S2,S2,'#3a2a3a');
-    ctx.strokeStyle = '#ff5d4a'; ctx.beginPath(); ctx.arc(mx+S2/2, my+S2/2, a.r*sc, 0, 6.283); ctx.stroke();
-    px(X(a.x)-3, Y(a.y+a.r-90)-3, 6, 6, '#ff5cf0');
-    for (const e of enemies) if (!e.dead) px(X(e.x)-(e.kind==='boss'?3:1), Y(e.y)-(e.kind==='boss'?3:1), e.kind==='boss'?6:3, e.kind==='boss'?6:3, e.kind==='boss'?'#ff3b3b':'#ffb347');
-    { const R = NET.R; if (R && R.seen && !R.dead && arenaAt(R.x,R.y) === ai) px(X(R.x)-2, Y(R.y)-2, 4, 4, '#7ee08a'); }
-    px(X(P.x)-1.5, Y(P.y)-1.5, 3, 3, '#ffffff');
-    text('BOSS ARENA  (PINK = EXIT)', mx+S2/2, my+S2+2, '#ff8c7a', 8, 'center'); return; }
-  if (!zoneAt(P.x,P.y) && P.y > -150){
-    const bx = FRIEND_SIDES.includes(1) && P.x > HUB.w/2+24 ? DX : FRIEND_SIDES.includes(-1) && P.x < -HUB.w/2-24 ? -DX : 0, mine = !bx;
-    const sc = S2/HUB.w, X = x => mx+(x-HUB.x)*sc, Xw = x => X(x-bx), Y = y => my+(y-HUB.y)*sc;   // X: base layout, Xw: world position
-    px(mx-2,my-2,S2+4,S2+14,'#0b0e15'); px(mx,my,S2,S2,mine ? '#4f9a4a' : '#3f7f5a');
-    for (const gs of mine ? FRIEND_SIDES : [-Math.sign(bx)]) px(gs > 0 ? mx+S2-2 : mx, Y(DOOR_Y0), 2, (DOOR_Y1-DOOR_Y0)*sc, '#5fe0ff');
-    px(X(BELT_X0),Y(BELT_Y0),(BELT_X1-BELT_X0)*sc,Math.max(2,(BELT_Y1-BELT_Y0)*sc),'#ffcf3a');
-    for (const p of PADS) px(X(p.x)-1.5,Y(p.y)-1.5,3,3,'#c9a020');
-    for (let i=0;i<4;i++){ const y = YARD[i], yd = mine ? S.yard[i] : NET.base && NET.base.yard[i]; px(X(y.x)-2,Y(y.y)-2,4,4, yd ? TIERS[yd.tier].c : '#2f6b45'); }
-    for (const t of TREADS) px(X(t.x)-1.5,Y(t.y)-3,3,6,'#ff9a4a');
-    px(X(REPAIR.x)-2,Y(REPAIR.y)-2,4,4,'#7ee08a'); px(X(FOUNTAIN.x)-3,Y(FOUNTAIN.y)-3,6,6,'#6fc8ff');
-    const blink = Math.floor(clock*3)%2; px(X(HANGAR.x)-5,Y(HANGAR.y)-5,10,10, mine ? (blink ? '#5fe0ff' : '#ffffff') : '#5a7a9a');
-    px(X(-LANE),my,LANE*2*sc,2, mine ? '#ffffff' : '#ff5cf0');
-    const R = NET.R; if (R && R.seen && !R.dead && R.y > -30 && Math.abs(R.x-bx) < HUB.w/2+30) px(Xw(R.x)-2, Y(R.y)-2, 4, 4, '#7ee08a');
-    const ppx = Xw(P.x), ppy = Y(P.y);
-    for (let k=2;k<8;k++) px(ppx+Math.cos(camYaw)*k, ppy+Math.sin(camYaw)*k, 1,1,'#fff'); px(ppx-1.5, ppy-1.5, 3,3,'#ff4fd0');
-    if (mine) text('BASE  (CYAN = WORKSHOP)', mx+S2/2, my+S2+2, '#5fe0ff', 8, 'center');
-    else text((R ? R.name : 'FRIEND') + "'S BASE", mx+S2/2, my+S2+2, '#7ee08a', 8, 'center');
-    return;
+// ---------- radar minimap: turns with the camera (up = the way you face), and a full world map on N ----------
+let BIGMAP = false;
+function mapWorld(ctx2, sc, lw){   // draws the world in world coordinates (caller sets the transform)
+  ctx2.fillStyle = '#0b0e15'; ctx2.fillRect(-1e5, -1e5, 2e5, 2e5);
+  for (let i=1;i<=NZ;i++){ const zn = ZONES[i-1]; ctx2.fillStyle = shade(zn.f1, 0.62); ctx2.fillRect(-Z/2, zTop(i), Z, Z);
+    const a = ARENA(i); ctx2.fillStyle = shade(zn.f1, 0.42); ctx2.beginPath(); ctx2.arc(a.x, a.y, a.r, 0, 6.283); ctx2.fill();
+    ctx2.fillStyle = '#3a4050'; ctx2.fillRect(-LANE, zBottom(i), LANE*2, B); }
+  for (const bx of [0, ...FRIEND_SIDES.map(sd => sd*DX)]){ ctx2.fillStyle = bx ? '#355e46' : '#3f7a3c'; ctx2.fillRect(HUB.x + bx, HUB.y, HUB.w, HUB.h);
+    ctx2.fillStyle = 'rgba(255,255,255,.18)'; ctx2.fillRect(-LANE + bx, 0, LANE*2, HUB.h); }
+  for (const sd of FRIEND_SIDES){ ctx2.fillStyle = '#5fe0ff'; ctx2.fillRect(sd > 0 ? HUB.w/2 : -DX + HUB.w/2, DOOR_Y0, DX - HUB.w, DOOR_Y1 - DOOR_Y0); }
+}
+function mapThings(ctx2, sc, range){   // markers on top, sized in screen pixels
+  const dot = (x, y, r, col, sq) => { if (range && Math.hypot(x-P.x, y-P.y) > range) return; ctx2.fillStyle = col; if (sq) ctx2.fillRect(x - r/sc, y - r/sc, 2*r/sc, 2*r/sc); else { ctx2.beginPath(); ctx2.arc(x, y, r/sc, 0, 6.283); ctx2.fill(); } };
+  const sensor = P.inMech && ST.K && ST.K.Head === 'Sensor Dome';
+  if (!range || !zoneAt(P.x,P.y)){   // base landmarks
+    ctx2.fillStyle = '#ffcf3a'; ctx2.fillRect(BELT_X0, BELT_Y0, BELT_X1-BELT_X0, BELT_Y1-BELT_Y0);
+    for (const pd of PADS) dot(pd.x, pd.y, 1.6, '#c9a020', true);
+    for (let i=0;i<4;i++) dot(YARD[i].x, YARD[i].y, 2.2, S.yard[i] ? TIERS[S.yard[i].tier].c : '#2f6b45', true);
+    dot(HANGAR.x, HANGAR.y, 3.2, Math.floor(clock*3)%2 ? '#5fe0ff' : '#ffffff', true); dot(REPAIR.x, REPAIR.y, 2, '#7ee08a', true);
+    for (const t of TREADS) dot(t.x, t.y, 1.6, '#ff9a4a', true);
   }
-  let zi = zoneAt(P.x,P.y);
-  if (!zi){ zi = 1; for (let i=1;i<=NZ;i++) if (P.y < zBottom(i)+B+10) zi = i; }
-  const sc = S2/Z, zn = ZONES[zi-1];
-  px(mx-2,my-2,S2+4,S2+14,'#0b0e15'); px(mx,my,S2,S2,shade(zn.f1,0.8));
-  for (const o of obs){ if (o.zone===zi && o.w > 90) px(mx+(o.x+Z/2)*sc, my+(o.y-zTop(zi))*sc, Math.max(1,o.w*sc), Math.max(1,o.h*sc), shade(zn.f1,0.5)); }
-  const sensor = P.inMech && ST.K.Head === 'Sensor Dome';
-  for (const e of enemies) if (e.mini && !e.dead && e.zone === zi){ const big = Math.floor(clock*3)%2; px(mx+(e.x+Z/2)*sc-2, my+(e.y-zTop(zi))*sc-2, big?6:5, big?6:5, '#ff9a2e'); }
-  for (const c of crates){ if (c.zone!==zi || (!sensor && Math.hypot(c.x-P.x,c.y-P.y) > 650)) continue; const blink = c.supply && Math.floor(clock*4)%2; px(mx+(c.x+Z/2)*sc-1, my+(c.y-zTop(zi))*sc-1, blink?4:3, blink?4:3, TIERS[c.tier].c); }
-  { const c = arenaC(zi); const bx = mx+(c.x+Z/2)*sc, by = my+(c.y-zTop(zi))*sc; ctx.strokeStyle = bosses[zi].alive ? '#ff3b3b' : '#7a3030'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(bx, by, 230*sc, 0, 6.283); ctx.stroke(); if (bosses[zi].alive) px(bx-2, by-2, 4, 4, '#ff3b3b'); }
-  for (const e of enemies) if (e.kind==='rival' && zoneAt(e.x,e.y)===zi && (sensor || Math.hypot(e.x-P.x,e.y-P.y) < 650)) px(mx+(e.x+Z/2)*sc-1, my+(e.y-zTop(zi))*sc-1, 3,3,'#ff3b3b');
-  { const R = NET.R; if (R && R.seen && !R.dead && zoneAt(R.x,R.y) === zi) px(mx+(R.x+Z/2)*sc-2, my+(R.y-zTop(zi))*sc-2, 4, 4, '#7ee08a'); }
-  if (zoneAt(P.x,P.y)===zi){ const ppx = mx+(P.x+Z/2)*sc, ppy = my+(P.y-zTop(zi))*sc;
-    for (let k=2;k<8;k++) px(ppx+Math.cos(camYaw)*k, ppy+Math.sin(camYaw)*k, 1,1,'#fff'); px(ppx-1.5, ppy-1.5, 3,3,'#ffffff'); }
-  text('Z'+zi+' '+zn.n.toUpperCase(), mx+S2/2, my+S2+2, zn.acc, 8, 'center');
+  for (let i=1;i<=NZ;i++) if (bosses[i]){ const a = ARENA(i); dot(a.x, a.y, bosses[i].alive ? 4 : 2.5, bosses[i].alive ? '#ff3b3b' : '#7a3030'); const c = arenaC(i); dot(c.x, c.y, 2.4, '#ff5cf0'); }
+  for (const c of crates){ if (range && !sensor && Math.hypot(c.x-P.x, c.y-P.y) > 650) continue; dot(c.x, c.y, c.supply && Math.floor(clock*4)%2 ? 3 : 2.2, TIERS[c.tier].c, true); }
+  for (const e of enemies){ if (e.dead) continue; const boss = e.kind === 'boss', big = boss || e.mini;
+    if (!range && !big) continue; dot(e.x, e.y, boss ? 4 : e.mini ? 3 : 1.6, boss ? '#ff3b3b' : e.mini ? '#ff9a2e' : e.kind === 'rival' ? '#ff3b3b' : '#ff8c7a'); }
+  if (MECH.state === 'parked' || MECH.state === 'repair') dot(MECH.state === 'repair' ? HANGAR.x : MECH.x, MECH.state === 'repair' ? HANGAR.y : MECH.y, 2.6, '#9be7ff', true);
+  const R = NET.R; if (R && R.seen && !R.dead) dot(R.x, R.y, 3, pvpLive() ? '#ff6b6b' : '#7ee08a');
+}
+function drawMinimap(){
+  if (BIGMAP) return drawBigMap();
+  const R0 = 50, cx = W - R0 - 8, cy = R0 + 8, zi = zoneAt(P.x,P.y), ai = arenaAt(P.x,P.y), sc = zi || ai ? 1/9 : 1/8;
+  const rot = -Math.PI/2 - camYaw;
+  ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R0, 0, 6.283); ctx.clip();
+  ctx.translate(cx, cy); ctx.rotate(rot); ctx.scale(sc, sc); ctx.translate(-P.x, -P.y);
+  mapWorld(ctx, sc);
+  const range = R0/sc + 40;
+  for (const o of obs){ if (Math.abs(o.x + o.w/2 - P.x) > range || Math.abs(o.y + o.h/2 - P.y) > range) continue;
+    ctx.fillStyle = o.type === 'wall' ? '#c9d2e3' : o.type === 'tree' ? '#2f6b45' : o.type === 'gate' ? '#ff5cf0' : 'rgba(0,0,0,.35)'; ctx.fillRect(o.x, o.y, o.w, o.h); }
+  mapThings(ctx, sc, range);
+  ctx.restore();
+  // ring, compass, you, and the guide target
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, R0, 0, 6.283); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, R0/2, 0, 6.283); ctx.stroke();
+  const onRing = (dx, dy, pad) => { const c = Math.cos(rot), sn = Math.sin(rot), rx = (dx*c - dy*sn)*sc, ry = (dx*sn + dy*c)*sc, d = Math.hypot(rx, ry), m = Math.min(1, (R0-pad)/Math.max(d, 1e-6));
+    return [cx + rx*m, cy + ry*m, d > R0 - pad]; };
+  { const [nx, ny] = onRing(0, -1e6, 6); px(nx-5, ny-5, 10, 10, 'rgba(8,12,24,.85)'); text('N', nx, ny-4, '#ff6b6b', 8, 'center'); }
+  const st = typeof TUT !== 'undefined' && TUT[S.tut ?? 0], tg = st && st.at && st.at();
+  if (tg){ const [tx, ty, edge] = onRing(tg.x - P.x, tg.y - P.y, 5); ctx.save(); ctx.translate(tx, ty); ctx.rotate(Math.PI/4); ctx.fillStyle = '#ffcf3a'; ctx.fillRect(-3, -3, 6, 6); ctx.restore(); }
+  ctx.save(); ctx.translate(cx, cy); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(4.5, 5); ctx.lineTo(0, 2.5); ctx.lineTo(-4.5, 5); ctx.closePath(); ctx.fill(); ctx.restore();
+  const label = ai ? 'BOSS ARENA' : zi ? 'Z' + zi + ' ' + ZONES[zi-1].n.toUpperCase() : (P.x > HUB.w/2+24 || P.x < -HUB.w/2-24) && FRIEND_SIDES.length ? ((NET.R ? NET.R.name : 'FRIEND') + "'S BASE") : 'BASE';
+  const lc = ai ? '#ff8c7a' : zi ? ZONES[zi-1].acc : '#7ee08a';
+  px(cx - 52, cy + R0 + 3, 104, 12, 'rgba(8,12,24,.7)'); text(label, cx, cy + R0 + 5, lc, 8, 'center');
+  text('N: MAP', cx + R0 - 2, cy + R0 - 10, 'rgba(255,255,255,.55)', 8, 'right');
+}
+function drawBigMap(){
+  const top = zTop(NZ) - 100, bot = HUB.y + HUB.h + 100, left = -Z/2 - (FRIEND_SIDES.includes(-1) ? DX : 0) - 200, right = Z/2 + 3200 + 1300;
+  const sc = Math.min((H - 40)/(bot - top), (W - 40)/(right - left)), ox = W/2 - (left + right)/2*sc, oy = 20 - top*sc;
+  px(0, 0, W, H, 'rgba(4,6,12,.82)');
+  ctx.save(); ctx.translate(ox, oy); ctx.scale(sc, sc); ctx.beginPath(); ctx.rect(left, top, right-left, bot-top); ctx.clip();
+  mapWorld(ctx, sc); mapThings(ctx, sc, 0); ctx.restore();
+  const T = (x, y) => [ox + x*sc, oy + y*sc];
+  for (let i=1;i<=NZ;i++){ const [lx, ly] = T(-Z/2 - 30, zTop(i) + Z/2); text('Z' + i + ' ' + ZONES[i-1].n.toUpperCase(), lx, ly - 3, ZONES[i-1].acc, 8, 'right');
+    const a = ARENA(i), [bx, by] = T(a.x + a.r + 30, a.y); text(BOSS_NAMES[i-1].toUpperCase() + (bosses[i] && bosses[i].alive ? '  (here now)' : ''), bx, by - 3, bosses[i] && bosses[i].alive ? '#ff6b6b' : '#7a8090', 8, 'left'); }
+  { const [lx, ly] = T(HUB.x - 30, HUB.y + HUB.h/2); text('BASE', lx, ly - 3, '#7ee08a', 8, 'right'); }
+  { const [mx2, my2] = T(P.x, P.y); ctx.save(); ctx.translate(mx2, my2); ctx.rotate(camYaw + Math.PI/2); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(5, 6); ctx.lineTo(-5, 6); ctx.closePath(); ctx.fill(); ctx.restore();
+    if (Math.floor(clock*3)%2){ ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(mx2, my2, 9, 0, 6.283); ctx.stroke(); } }
+  text('WORLD MAP   N: CLOSE   RED: BOSSES   PINK: PORTALS   GREEN: FRIEND', W/2, H - 14, '#c9d2e3', 8, 'center');
 }
 let VIGNETTE = null;
 // ---------- animation helpers ----------
@@ -3763,7 +3787,7 @@ let VIGK = 0, HUDK = 1;
 function drawHUD(){
   const k = S.bigText ? 1.25 : 1; W = 640/k; H = 360/k; HUDK = k;
   if (VIGK !== k){ VIGNETTE = null; VIGK = k; }
-  try { drawHUDInner(); tutHUD(); } finally { W = 640; H = 360; }
+  try { drawHUDInner(); if (!BIGMAP) tutHUD(); } finally { W = 640; H = 360; }
 }
 function drawHUDInner(){
   ctx.setTransform(2*HUDK,0,0,2*HUDK,0,0);
@@ -3869,7 +3893,7 @@ function drawHUDInner(){
   }
   drawMinimap(); netBadge();
   // missions under the minimap
-  if (!zoneAt(P.x,P.y) && !arenaAt(P.x,P.y) && P.y > -150 || missionFlash > 0) { const mx = W-150, my = 130; px(mx-4, my-4, 148, 14 + S.missions.length*22, 'rgba(8,12,24,.58)');
+  if (!zoneAt(P.x,P.y) && !arenaAt(P.x,P.y) && P.y > -150 || missionFlash > 0) { const mx = W-150, my = 148; px(mx-4, my-4, 148, 14 + S.missions.length*22, 'rgba(8,12,24,.58)');
     text('MISSIONS', mx, my-1, missionFlash > 0 ? '#7ee08a' : '#ffcf3a');
     S.missions.forEach((m, i) => { const y = my + 11 + i*22;
       text(m.text.toUpperCase(), mx, y, '#c9d2e3');
@@ -4296,10 +4320,10 @@ function pvpTick(dt){
 }
 function netBadge(){
   const pv = (S.pvpKills || S.pvpDeaths) ? '  PVP ' + (S.pvpKills||0) + '-' + (S.pvpDeaths||0) : '';
-  if (NET.status === 'online') text('ONLINE: ' + (NET.R ? NET.R.name : 'FRIEND') + pv, W-6, 112, '#7ee08a', 8, 'right');
-  if (NET.status === 'online' && inPvpArea(P.y) && !P.dead) text(clock < (P.pvpSafe||0) ? 'SPAWN SHIELD' : 'PVP ZONE', W-6, 122, clock < (P.pvpSafe||0) ? '#9be7ff' : '#ff6b6b', 8, 'right');
-  else if (NET.status === 'waiting') text('HOSTING  CODE ' + NET.code, W-6, 112, '#ffcf3a', 8, 'right');
-  else if (NET.status === 'connecting') text('CONNECTING...', W-6, 112, '#c9d2e3', 8, 'right');
+  if (NET.status === 'online') text('ONLINE: ' + (NET.R ? NET.R.name : 'FRIEND') + pv, W-6, 126, '#7ee08a', 8, 'right');
+  if (NET.status === 'online' && inPvpArea(P.y) && !P.dead) text(clock < (P.pvpSafe||0) ? 'SPAWN SHIELD' : 'PVP ZONE', W-6, 136, clock < (P.pvpSafe||0) ? '#9be7ff' : '#ff6b6b', 8, 'right');
+  else if (NET.status === 'waiting') text('HOSTING  CODE ' + NET.code, W-6, 126, '#ffcf3a', 8, 'right');
+  else if (NET.status === 'connecting') text('CONNECTING...', W-6, 126, '#c9d2e3', 8, 'right');
 }
 
 /* ================= loop ================= */
