@@ -472,10 +472,10 @@ const ZONES = [
   {n:'Jungle Ruins',   f1:'#8cbf6e', f2:'#82b465', acc:'#7ee08a', wall:'#6f9a58', deco:['tree','tree','ruin','rock','tree']},
   {n:'Rust Canyon',    f1:'#e6b984', f2:'#dcae78', acc:'#ff9a4a', wall:'#c9966a', deco:['mesa','rock','cactus','cactus','pile']},
   {n:'Frost Peaks',    f1:'#e3edf7', f2:'#d8e4f1', acc:'#6ccfff', wall:'#bccfe2', deco:['ice','pine','pine','rock']},
-  {n:'Neon Foundry',   f1:'#b4bdd0', f2:'#aab3c6', acc:'#5fe0ff', wall:'#949fb6', deco:['factory','pipe','pipe','rock']},
-  {n:'Magma Works',    f1:'#b98a7c', f2:'#af8072', acc:'#ff7a3a', wall:'#956a5e', deco:['spike','lava','rock','spike']},
+  {n:'Neon Foundry',   f1:'#8c95aa', f2:'#838ca1', acc:'#5fe0ff', wall:'#949fb6', deco:['factory','pipe','pipe','rock']},
+  {n:'Magma Works',    f1:'#7a554a', f2:'#714d43', acc:'#ff7a3a', wall:'#956a5e', deco:['spike','lava','rock','spike']},
   {n:'Void Rift',      f1:'#ab9fcd', f2:'#a194c3', acc:'#d07bff', wall:'#8b7fb2', deco:['crystal','crystal','rock','spike']},
-  {n:'Cosmic Station', f1:'#cfd3ec', f2:'#c5c9e4', acc:'#ff5cf0', wall:'#aeb3d4', deco:['dish','pipe','crystal','dish']}];
+  {n:'Cosmic Station', f1:'#5a5f94', f2:'#53588c', acc:'#ff5cf0', wall:'#aeb3d4', deco:['dish','pipe','crystal','dish']}];
 const ZONE_RSTART = [1,1,2,2,3,3,4,4];
 const ZONE_W = [[55,27,12,5,1],[38,30,19,10,3]];
 function rollRarity(zone, bonus){
@@ -2894,11 +2894,29 @@ function drawBaseStatic(bt){
   for (const t of TREADS){ box(bt, t.x, t.y, 0, 50, 6, 104, 0, '#3a404d'); for (const sx of [-27,27]){ cyl(bt, t.x+sx, t.y-48, 0, 3, 22, 3, 0, '#e8eef7'); cyl(bt, t.x+sx, t.y+48, 0, 3, 22, 3, 0, '#e8eef7'); box(bt, t.x+sx, t.y, 20, 3, 3, 100, 0, '#e8eef7'); }
     box(bt, t.x, t.y-56, 0, 50, 46, 8, 0, '#ff9a4a'); box(bt, t.x, t.y-60, 36, 40, 10, 2, 0, t.need ? '#ff5cf0' : '#7ee08a', 1); }
 }
+// small ground details (no collision) so each zone looks lived-in: scrap bits, grass, pebbles, snow, floor lights, lava cracks, crystals
+function groundClutter(bt, i){
+  const rg = mulberry(5000 + i*131), top = zTop(i), z = ZONES[i-1], acc = z.acc;
+  const free = (x, y) => !(Math.abs(x) < LANE + 40) && !circleHits(x, y, 26) && Math.hypot(x - arenaC(i).x, y - arenaC(i).y) > 260;
+  for (let n=0, tries=0; n<420 && tries<2600; tries++){
+    const x = rr(-Z/2+40, Z/2-40, rg), y = rr(top+40, top+Z-40, rg); if (!free(x, y)) continue; n++;
+    const r = rg(), yw = rg()*6.283, s = rr(0.7, 1.4, rg);
+    if (i === 1){ if (r < 0.4) box(bt, x, y, 0, 7*s, 2.4*s, 4*s, yw, ['#8a7a66','#9fb3c8','#a0522d'][n%3]); else if (r < 0.6) cyl(bt, x, y, 0, 12*s, 4*s, 12*s, 0, '#2a2a2e'); else { box(bt, x, y, 0, 3*s, 1.4, 9*s, yw, '#b7c0cf'); box(bt, x+4, y+2, 0, 2.4*s, 2.4*s, 2.4*s, yw, '#6a5a48'); } }
+    if (i === 2){ for (let k=0;k<4;k++) box(bt, x + rr(-5,5,rg), y + rr(-5,5,rg), 0, 1.4, rr(5,11,rg)*s, 1.4, yw + k, k%2 ? '#4f9a35' : '#6fbf4a', 0, rr(-0.3,0.3,rg)); if (r < 0.2) sph(bt, x, y, 6*s, 3, 3, 3, 0, ['#ff6b9a','#ffd23f','#ffffff'][n%3]); }
+    if (i === 3){ if (r < 0.6) sph(bt, x, y, 0, 8*s, 5*s, 7*s, yw, ['#c8834a','#d9a066','#b06a3a'][n%3]); else for (let k=0;k<5;k++) box(bt, x, y, 0, 1, 7*s, 1, yw + k*1.2, '#8a6a3a', 0, 0.6); }
+    if (i === 4){ if (r < 0.65) sph(bt, x, y, -2, 22*s, 7*s, 16*s, yw, '#f4f8fc'); else for (let k=0;k<3;k++) box(bt, x + k*3, y, 0, 2.4, (6 + k*3)*s, 2.4, yw, '#bfe8ff', 0, (k-1)*0.25); }
+    if (i === 5){ if (r < 0.5) box(bt, x, y, 0.15, 40*s, 0.4, 3, yw, '#5fe0ff', 1); else if (r < 0.8) box(bt, x, y, 0, 12*s, 9*s, 12*s, yw, ['#3a4256','#4a5570'][n%2]); else { cyl(bt, x, y, 0, 3, 14*s, 3, 0, '#5a6378'); sph(bt, x, y, 14*s, 2.4, 2.4, 2.4, 0, '#5fe0ff', 1); } }
+    if (i === 6){ if (r < 0.55){ for (let k=0;k<3;k++) box(bt, x + k*10*Math.cos(yw), y + k*10*Math.sin(yw), 0.15, 12*s, 0.4, 2, yw + (k%2 ? 0.6 : -0.6), '#ff6a2a', 1); } else box(bt, x, y, 0, 10*s, 7*s, 9*s, yw, '#3a2a26', 0, 0.2); }
+    if (i === 7){ for (let k=0;k<3;k++) box(bt, x + rr(-6,6,rg), y + rr(-6,6,rg), 0, 2.6*s, rr(6,16,rg)*s, 2.6*s, yw + k, k ? '#d07bff' : '#f0c8ff', 1, rr(-0.3,0.3,rg)); }
+    if (i === 8){ if (r < 0.55) box(bt, x, y, 0.15, 14*s, 0.4, 14*s, 0, ['#ff5cf0','#5fe0ff'][n%2], 1); else { cyl(bt, x, y, 0, 2, 18*s, 2, 0, '#9aa3b8'); sph(bt, x, y, 18*s, 2, 2, 2, 0, '#ff5cf0', 1); } }
+  }
+}
 function buildZonesStatic(bt){
   // ---------- zones ----------
   for (let i=1;i<=NZ;i++){ const z = ZONES[i-1];
     box(bt, 0, zBottom(i)+B/2, -4, LANE*2, 4, B, 0, '#e8eef7', 2);
     box(bt, 0, zTop(i)+Z/2, -4, Z, 4, Z, 0, z.f1, 2);
+    groundClutter(bt, i);
     // portal to the boss arena
     const c = arenaC(i);
     cyl(bt, c.x, c.y, 0, 180, 4, 180, 0, '#e8eef7'); cyl(bt, c.x, c.y, 4, 150, 0.6, 150, 0, '#3a2a5a');
