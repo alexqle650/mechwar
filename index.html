@@ -266,6 +266,23 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
           <p class="label">Text size</p><div class="btns"><button class="btn" id="txtBtn">Text: Normal</button></div>
           <p class="label">Hints</p><div class="btns"><button class="btn" id="hintBtn">Control hints: On</button><button class="btn" id="tutBtn">Restart guide</button></div>
         </div>
+        <div class="btns" style="margin-top:10px"><button class="btn" id="admShow">Admin tools (for testing)</button></div>
+        <div id="admBox" hidden style="margin-top:8px;padding:10px;border:2px dashed #ff9a2e">
+          <p class="label" style="color:#ff9a2e;margin:0 0 6px">Admin tools: for testing. They change your save.</p>
+          <div class="btns">
+            <button class="btn" data-adm="scrap1">+10,000 scrap</button><button class="btn" data-adm="scrap2">+1,000,000 scrap</button>
+            <button class="btn" data-adm="core">Core level 50</button><button class="btn" data-adm="lvl">+10 levels</button>
+          </div>
+          <div class="btns" style="margin-top:6px;align-items:center">
+            <select id="admTier" class="btn" style="font:inherit"></select><select id="admArea" class="btn" style="font:inherit"></select>
+            <button class="btn" data-adm="set">Equip a full set</button><button class="btn" data-adm="parts">+10 random parts</button><button class="btn" data-adm="all">One of every part</button>
+          </div>
+          <div class="btns" style="margin-top:6px">
+            <button class="btn" data-adm="spd" id="admSpd">Speed: x1</button><button class="btn" data-adm="god" id="admGod">God mode: Off</button>
+            <button class="btn" data-adm="inst" id="admInst">Instant crates: Off</button><button class="btn" data-adm="yard">Finish yard crates</button>
+            <button class="btn" data-adm="night">Skip to night/day</button><button class="btn" data-adm="kill">Clear enemies</button>
+          </div>
+        </div>
         <p class="label" style="margin-top:12px">Controls</p>
         <p class="body" style="font-size:.85rem;margin:0;line-height:1.5">Move WASD · Aim with the mouse · Shoot: click or hold · Zoom: wheel · Turn camera: right-drag, Z / C · Q pulse · Space dodge or leg ability · E buy, open, steal · R get in or out of your mech · B workshop · I index · K skins · U upgrades · L lock your base · P multiplayer · M sound · N world map · F / G / H fight, flee or yard a crate · Esc pause</p>
         <div class="btns" style="margin-top:10px"><button class="btn" id="quitBtn">Back to title</button></div>
@@ -499,7 +516,9 @@ function newSave(){
   return s;
 }
 function load(){ try { const t = localStorage.getItem(KEY); if (t){ const s = JSON.parse(t); if (s && Array.isArray(s.parts)) return s; } } catch(e){} return null; }
-function save(){ try { S.savedAt = Date.now(); localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+let saveBroken = false;
+function save(){ try { S.savedAt = Date.now(); localStorage.setItem(KEY, JSON.stringify(S)); saveBroken = false; }
+  catch(e){ if (!saveBroken && typeof note === 'function') note('This browser is blocking saves here. Use Codes & Save to copy a save code.', '#ff8c7a'); saveBroken = true; } }
 let S = load() || newSave();
 const hadSave = !!load();
 if (!S.up) S.up = {cspd:0, cluck:0, csize:0, php:0, pdmg:0, drones:0};
@@ -1345,7 +1364,7 @@ function updateFlee(dt){
 function sendToYard(c){
   const i = S.yard.indexOf(null);
   if (i < 0){ note('Your crate yard is full. Collect a crate first.', '#ff8c7a'); return false; }
-  S.yard[i] = {tier:c.tier, zone:c.zone, supply:!!c.supply, start:Date.now(), dur:YARD_T[c.tier]*1000*(c.supply ? 1.5 : 1), told:false};
+  S.yard[i] = {tier:c.tier, zone:c.zone, supply:!!c.supply, start:Date.now(), dur:(S.adm && S.adm.inst) ? 500 : YARD_T[c.tier]*1000*(c.supply ? 1.5 : 1), told:false};
   note('A drone is carrying the '+TIERS[c.tier].r+' crate to your yard. It opens in '+fmt(S.yard[i].dur/1000)+'.', TIERS[c.tier].c);
   removeCrate(c); save(); return true;
 }
@@ -2031,7 +2050,7 @@ function pulse(){
   for (const e of targets()) if (!e.dead && dist(e,P) <= 110 + e.r) hurtEnemy(e, ST.pulse);
 }
 function hurtPlayer(d, src, pvp){
-  if (P.dead) return;
+  if (P.dead || (S.adm && S.adm.god)) return;
   if (P.inMech){
     d *= 1 - ST.resist;
     if (ST.thorns && src && !src.dead) hurtEnemy(src, d*ST.thorns);
@@ -2119,7 +2138,7 @@ function updatePlayer(dt){
   if (P.fly){ P.fuel -= dt/fuelTime; if (P.fuel <= 0){ P.fuel = 0; P.fly = false; note('Out of fuel! Landing.', '#ff8c7a'); } }
   else P.fuel = Math.min(1, P.fuel + dt/5);
   P.lift = (P.lift||0) + ((P.fly ? 46 : 0)*mS()/1.45 - (P.lift||0))*Math.min(1, dt*3.5);
-  const spdMul = (P.odT > 0 && P.inMech ? 1.2 : 1) * trailMul() * trainMul() * (P.fly ? 1.35 : 1) * (P.carry ? STEAL_SLOW : 1);
+  const spdMul = ((S.adm && S.adm.spd) || 1) * (P.odT > 0 && P.inMech ? 1.2 : 1) * trailMul() * trainMul() * (P.fly ? 1.35 : 1) * (P.carry ? STEAL_SLOW : 1);
   P.x += mx*cs.speed*9*spdMul*dt; P.y += my*cs.speed*9*spdMul*dt;
   if (P.dashT > 0){ const dsp = (P.inMech ? 3.2 : 2.6)*cs.speed*9; P.x += P.dvx*dsp*dt; P.y += P.dvy*dsp*dt; if (P.inMech) burst(P.x, P.y, '#ffb347', 1, 30); }
   if (!(P.lift > 18)) collide(P,true); else collideWalls(P); arenaClamp(P);
@@ -2183,7 +2202,7 @@ function updatePlayer(dt){
   if (holding && near && near.guardsSpawned && !guardsAlive(near) && !wave && !flee){
     if (P.openC !== near){ P.openC = near; P.openT = 0; }
     P.openT += dt;
-    if (P.openT >= OPEN_TIME*cs.openMul){ P.openT = 0; P.openC = null; offerChoice(near); }
+    if (P.openT >= OPEN_TIME*cs.openMul*(S.adm && S.adm.inst ? 0 : 1)){ P.openT = 0; P.openC = null; offerChoice(near); }
   } else { P.openT = 0; P.openC = null; }
   P.nearCrate = near;
 }
@@ -2888,9 +2907,10 @@ function rig(bt, x, z, yaw, o){
     const lz = L.lz, a1 = L.a1, a2 = L.a2, sd = lz > 0 ? 1 : -1, D = DS('Legs'), d = D.d, pl = D.pl, gl = D.gl;
     const kx = Math.sin(a1)*LEG1, ky = hipY - Math.cos(a1)*LEG1, fx = kx + Math.sin(a2)*LEG2, fy = ky - Math.cos(a2)*LEG2, gy = Math.max(0, fy - FOOT);
     part(sph,0,hipY-2.3,lz,4.6,4.6,4.6,dk);                                  // hip joint
-    segAt(cyl,0,hipY,a1,0,0,LEG1,2.4,2.4,lz,dk);                             // thigh frame
+    segAt(cyl,0,hipY,a1,0,0,LEG1,3.2,3.2,lz,dk);                             // thigh frame
+    segAt(box,0,hipY,a1,1.2,0,LEG1-2.8,4.4,4.6,lz,D.lo);                     // thigh armour (every design: no bare stick thighs)
     part(sph,kx,ky-1.9,lz,3.6,3.6,3.6,dk);                                   // knee joint
-    segAt(cyl,kx,ky,a2,0,0,LEG2,2.2,2.2,lz,dk);                              // shin frame
+    segAt(cyl,kx,ky,a2,0,0,LEG2,2.8,2.8,lz,dk);                              // shin frame
     part(sph,fx,fy-0.6,lz,2.6,2.6,2.6,dk);                                   // ankle
     if (d === 1){        // Scrap: pipe legs, dented barrel shins, clunky boots
       segAt(cyl,kx,ky,a2,1,0,6.2,3.6,3.6,lz,pl); part(sph,kx+1.6,ky-1.6,lz,1.2,1.2,1.2,D.tr);
@@ -3072,12 +3092,13 @@ function rig(bt, x, z, yaw, o){
       const a1 = melee ? pp : holds ? 0.72 + (o.recoil||0)*0.12 : pp*0.9, a2 = melee ? pp : holds ? 1.5 : a1 + 0.38 + Math.max(0, -pp)*0.4;
       const ex = Math.sin(a1)*U1, ey = sy0 - Math.cos(a1)*U1, hx = ex + Math.sin(a2)*U2, hy = ey - Math.cos(a2)*U2;
       part(sph,0,sy0-2.6,lz,4.8,4.8,4.8,dk);                                  // shoulder joint
-      segAt(cyl,0,sy0,a1,0,0,U1,2.6,2.6,lz,dk);                              // upper arm frame
-      part(sph,ex,ey-1.6,lz,3.2,3.2,3.2,dk);                                 // elbow
+      segAt(cyl,0,sy0,a1,0,0,U1,3.2,3.2,lz,dk);                              // upper arm frame
+      if (d !== 3) segAt(box,0,sy0,a1,1.4,0,U1-2.6,3.8,4,lz,lo);             // upper arm armour (no bare stick arms)
+      part(sph,ex,ey-1.6,lz,3.8,3.8,3.8,dk);                                 // elbow
       const fingers = col => { if (melee || holds) return; for (const dz of [-1,0,1]){ const fx2 = hx + Math.sin(a2)*1.8, fy2 = hy - Math.cos(a2)*1.8;
         part(box,fx2,fy2-1.6,lz+dz*0.95,0.7,1.8,0.6,col,0,a2+0.3); } };
       if (d === 1){        // Scrap: bare pipe arm, clunky can forearm, pincer claw
-        segAt(cyl,ex,ey,a2,0.4,0,5.6,4.4,4.4,lz,pl); part(box,0.6,sy-2,lz+ld*1,3,1,3,D.tr,0,0.4);
+        segAt(cyl,ex,ey,a2,0.4,0,5.6,4.4,4.4,lz,pl); part(cyl,0,sy-4.2,lz+ld*1,6.6,6,6.6,pl); part(cyl,0,sy+1.6,lz+ld*1,6.8,0.6,6.8,D.tr);   // oil-drum shoulder
         part(box,hx,hy-1.4,lz,2.6,2.6,2.6,dk,0,a2); if (!holds) for (const dz of [-0.9,0.9]) part(box,hx+Math.sin(a2)*2,hy-Math.cos(a2)*2-1.4,lz+dz,0.8,2.6,0.6,D.tr,0,a2+dz*0.3);
       } else if (d === 2){ // Worker: round shoulder with a hazard band, piston, lamp forearm
         part(sph,0,sy-4.6,lz+ld*0.8,8.4,7.6,8.4,pl); part(cyl,0,sy-1.4,lz+ld*0.8,8.8,0.9,8.8,D.tr); part(cyl,0,sy-0.5,lz+ld*0.8,8.8,0.5,8.8,'#1a1a1a');
@@ -3677,8 +3698,11 @@ function render3D(){
   VP = mul(persp(1.05, W/H, 2, 3000), lookAt(EYE, target, [0,1,0]));
   if (!glOk) return;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const cw = Math.max(320, Math.min(2200, Math.round(cv.clientWidth * dpr * (GFX.fast ? 0.7 : 1)))), ch = Math.round(cw*9/16);
+  const cw = Math.max(320, Math.min(2200, Math.round(cv.clientWidth * dpr * (GFX.fast ? 0.85 : 1)))), ch = Math.round(cw*9/16);
   if (cv.width !== cw || cv.height !== ch){ cv.width = cw; cv.height = ch; }
+  // the HUD canvas matches the screen's real pixels, so text and the minimap stay sharp on big and high-DPI screens
+  const hw = Math.max(640, Math.min(3200, Math.round(hud.clientWidth * dpr))), hh = Math.round(hw*9/16);
+  if (hud.width !== hw || hud.height !== hh){ hud.width = hw; hud.height = hh; VIGNETTE = null; }
   buildDynamic();
   const fxOn = fxBegin(horizon);
   if (!fxOn){ gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0,0,cv.width,cv.height);
@@ -3873,7 +3897,7 @@ function drawHUD(){
   try { drawHUDInner(); if (!BIGMAP){ tutHUD(); stealHUD(); } } finally { W = 640; H = 360; }
 }
 function drawHUDInner(){
-  ctx.setTransform(2*HUDK,0,0,2*HUDK,0,0);
+  const hk = hud.width/640*HUDK; ctx.setTransform(hk,0,0,hk,0,0); ctx.imageSmoothingEnabled = true;
   ctx.clearRect(0,0,W,H);
   if (!VIGNETTE){ VIGNETTE = ctx.createRadialGradient(W/2, H/2, H*0.42, W/2, H/2, H*0.98); VIGNETTE.addColorStop(0, 'rgba(0,0,0,0)'); VIGNETTE.addColorStop(1, 'rgba(4,8,20,.42)'); }
   ctx.fillStyle = VIGNETTE; ctx.fillRect(0, 0, W, H);
@@ -4245,6 +4269,32 @@ function musicTick(){
   }
 }
 // ---------- settings + pause ----------
+// ---------- admin tools (testing): opened from Settings. Everything is local to this save; nothing secret here ----------
+const ADM = () => S.adm || (S.adm = {spd:1, god:false, inst:false});
+function renderAdm(){
+  const A = ADM();
+  if (!$('admTier').options.length){ $('admTier').innerHTML = TIERS.slice(1).map((t, i) => '<option value="'+(i+1)+'">'+t.r+' ('+DSG[i+1].n+')</option>').join('');
+    $('admArea').innerHTML = ZONES.map((z, i) => '<option value="'+(i+1)+'">'+z.n+' parts</option>').join(''); $('admTier').value = NR; }
+  $('admSpd').textContent = 'Speed: x' + A.spd; $('admGod').textContent = 'God mode: ' + (A.god ? 'On' : 'Off'); $('admInst').textContent = 'Instant crates: ' + (A.inst ? 'On' : 'Off');
+}
+$('admShow').addEventListener('click', () => { $('admBox').hidden = !$('admBox').hidden; renderAdm(); });
+$('admBox').addEventListener('click', e => {
+  const b = e.target.closest('button[data-adm]'); if (!b) return; const A = ADM(), k = b.dataset.adm, t = +$('admTier').value || NR, a = +$('admArea').value || 1;
+  if (k === 'scrap1') S.scrap += 10000;
+  if (k === 'scrap2') S.scrap += 1000000;
+  if (k === 'core') S.core = 50;
+  if (k === 'lvl') for (let i=0;i<10;i++) addXp(xpNeed(S.lvl||1));
+  if (k === 'set'){ for (const sl of SLOTS){ const p = newPart(t, sl, a, 1); givePart(p); S.eq[sl] = p.id; } if (!S.mechBuilt){ S.mechBuilt = true; MECH.state = 'parked'; MECH.x = HANGAR.x; MECH.y = HANGAR.y; } }
+  if (k === 'parts') for (let i=0;i<10;i++) givePart(newPart(t, null, a));
+  if (k === 'all') for (const it of ITEMS){ const p = newPart(t, it.slot, it.area, 1); p.name = it.name; givePart(p); }
+  if (k === 'spd') A.spd = A.spd === 1 ? 2 : A.spd === 2 ? 4 : 1;
+  if (k === 'god') A.god = !A.god;
+  if (k === 'inst') A.inst = !A.inst;
+  if (k === 'yard') for (const y of S.yard) if (y) y.start = Date.now() - y.dur - 1;
+  if (k === 'night') phaseLeft = 1;
+  if (k === 'kill') for (const en of enemies) if (en.kind !== 'boss') despawn(en);
+  notes.length = 0; sfx('click'); afterGearChange(); save(); renderAdm();
+});
 function renderSet(){
   $('gfxFancy').classList.toggle('primary', !GFX.fast); $('gfxFast').classList.toggle('primary', GFX.fast);
   $('glowBtn').textContent = 'Glow: ' + (S.glow === false ? 'Off' : 'On') + (GFX.fast ? ' (off in Fast)' : '');
