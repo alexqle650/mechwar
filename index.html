@@ -801,7 +801,9 @@ const SOUNDS = {
   night:   [1.0,  () => { tone(196, 1.4, 'triangle', 0.08); tone(147, 1.6, 'triangle', 0.07, 0, 0.2); }],
   open:    [0.2,  () => { noiz(0.2, 0.1, 2000, 500); tone(400, 0.3, 'triangle', 0.05, 1200); }],
   click:   [0.03, () => tone(700, 0.03, 'square', 0.03)],
-  warn:    [0.3,  () => tone(440, 0.5, 'sawtooth', 0.06, 220)]};
+  warn:    [0.3,  () => tone(440, 0.5, 'sawtooth', 0.06, 220)],
+  error:   [0.2,  () => { tone(220, 0.12, 'square', 0.04); tone(165, 0.18, 'square', 0.04, 0, 0.1); }],
+  streak:  [0.3,  () => { [659,880,1175].forEach((f,i) => tone(f, 0.14, 'square', 0.045, 0, i*0.06)); noiz(0.3, 0.06, 6000, 1500); }]};
 let SJIT = 1;
 function sfx(name){ const sd = SOUNDS[name]; if (!sd || !AC || S.muted) return; const now = performance.now()/1000; if (now - (sndLast[name]||0) < sd[0]) return; sndLast[name] = now;
   SJIT = 1 + (Math.random() - 0.5)*0.12; try { sd[1](); } catch(e){} SJIT = 1; }
@@ -1083,6 +1085,8 @@ function hurtEnemy(e, d, crit){
     if (e.sh <= 0){ ring(e.x, e.y, '#5fb8ff', e.r*3); burst(e.x, e.y, '#5fb8ff', 16, 160); sfx('block'); floater(e.x, e.y, 'SHIELD BROKEN', '#5fb8ff', 40*e.sc); }
     if (d <= 0){ e.hitT = 0.1; hitMark = 0.12; sfx('shield'); return; } }
   e.hp -= d; e.hitT = 0.1; e.aggro = 5;
+  if (e.kind !== 'boss' && !e.mini && (e.size||1) <= 2){ const a = Math.atan2(e.y - P.y, e.x - P.x), kb = Math.min(10, 2 + d/Math.max(1, e.max)*40)/(e.size||1);   // small shove away from you
+    e.x += Math.cos(a)*kb; e.y += Math.sin(a)*kb; collide(e, false); }
   hitMark = crit ? -0.16 : 0.12; sfx(crit ? 'crit' : 'hit');
   if (P.inMech && ST.vamp && !P.dead) P.hp = Math.min(ST.maxhp, P.hp + d*ST.vamp);
   floater(e.x, e.y, (crit ? 'CRIT ' : '')+Math.round(d), crit ? '#ffd23f' : '#fff', 34*e.sc, crit ? 15 : 0);
@@ -1098,7 +1102,7 @@ function killEnemy(e){
   mission('kill'); if (isNight) mission('night');
   burst(e.x,e.y,'#ffb347',26,180); burst(e.x,e.y,'#555',10,90); ring(e.x,e.y,'#ffdd88',30*e.sc);
   const reward = Math.round(3*e.tier*e.tier*ESIZE[e.size||1].rw * (P.inMech ? ST.scrapMul : 1));
-  S.scrap += reward; S.kills++; addXp(Math.round((4 + 3*e.tier) * ESIZE[e.size||1].rw)); if ((e.size||1) >= 3) hitStop = Math.max(hitStop, 0.08);
+  S.scrap += reward; S.kills++; killStreak(e); addXp(Math.round((4 + 3*e.tier) * ESIZE[e.size||1].rw)); if ((e.size||1) >= 3) hitStop = Math.max(hitStop, 0.08);
   floater(e.x, e.y, '+'+reward+' scrap', '#ffcf3a', 46*e.sc);
   if (e.kind==='rival'){
     note('Rival Mech destroyed! +'+reward+' scrap','#ff8c7a');
@@ -1110,6 +1114,22 @@ function killEnemy(e){
   if (e.mini){ minis[e.zone] = {at: clock + 180}; const z = e.zone; addXp(120*z); flash('#ff9a2e', 0.4);
     giveLoot([newPart(Math.min(NR, rollRarity(z) + 1), null, z), newPart(Math.min(NR, rollRarity(z) + 2), null, z)], 150*z*z, 'MINI-BOSS DOWN: '+e.name+'! It comes back in 3 minutes.'); }
   if (e.wave && wave === e.wave) onWaveKill();
+}
+// kill streaks: kills close together build up a streak with a bonus and a big callout
+let streak = 0, streakT = 0, streakShow = null;
+const STREAK = [null, null, 'DOUBLE KILL', 'TRIPLE KILL', 'QUAD KILL', 'RAMPAGE', 'UNSTOPPABLE', 'MECH GOD'];
+function killStreak(e){
+  streak = clock < streakT ? streak + 1 : 1; streakT = clock + 3.2;
+  if (streak < 2) return;
+  const nm = STREAK[Math.min(streak, STREAK.length-1)], bonus = Math.round(5*streak*streak*(e.tier||1)*rbScrap());
+  S.scrap += bonus; streakShow = {nm, t:1.6, bonus, n:streak}; sfx('streak');
+  if (streak >= 5){ flash('#ffd23f', 0.25); hitStop = Math.max(hitStop, 0.05); }
+}
+function streakHUD(dt){
+  if (!streakShow) return; streakShow.t -= dt; if (streakShow.t <= 0){ streakShow = null; return; }
+  const k = Math.min(1, streakShow.t*2), pop = 1 + Math.max(0, streakShow.t - 1.3)*1.5, sz = Math.round((streakShow.n >= 5 ? 22 : 16)*pop);
+  ctx.globalAlpha = k; text(streakShow.nm + (streakShow.n > 7 ? ' x'+streakShow.n : ''), W/2, H*0.26, streakShow.n >= 5 ? '#ff5cf0' : '#ffd23f', sz, 'center');
+  text('+' + streakShow.bonus + ' SCRAP', W/2, H*0.26 + sz + 4, '#ffcf3a', 8, 'center'); ctx.globalAlpha = 1;
 }
 function enemyShoot(e){
   if (e.role === 'sniper'){ const a = Math.atan2(P.y-e.y, P.x-e.x), sp = 560 + e.tier*20;   // one fast, hard, accurate shot
@@ -1598,7 +1618,9 @@ const rbNeed = () => ({lvl: 10 + 8*(S.rb||0), scrap: Math.round(5000*Math.pow(2.
 function renderRb(){
   const n = rbNeed(), ok = (S.lvl||1) >= n.lvl && S.scrap >= n.scrap;
   $('rbBox').innerHTML = '<div class="scard" style="width:100%"><b>Rebirth '+(S.rb||0)+'  ·  '+((1+0.25*(S.rb||0))).toFixed(2)+'x scrap forever  ·  '+(S.rbt||0)+' rebirth tokens</b>'+
-    '<span style="font-size:.85rem">Rebirthing resets your scrap, level, core level and upgrades. You keep every part, skin and your Index. Each rebirth gives +25% scrap forever and 1 token for the shop below.</span>'+
+    '<span style="font-size:.85rem"><b style="color:#7ee08a">You get:</b> +25% scrap from everything, forever, and 1 rebirth token for the shop below.</span>'+
+    '<span style="font-size:.85rem"><b style="color:#ff8c7a">You lose:</b> your scrap (back to 100), level, core level and upgrades.</span>'+
+    '<span style="font-size:.85rem"><b style="color:#5fe0ff">You keep:</b> every part, your built mech, skins, trails and your Index.</span>'+
     '<span style="font-size:.85rem">Needs level '+n.lvl+' and '+n.scrap+' scrap (you have level '+(S.lvl||1)+').</span>'+
     '<button class="btn primary" id="rbGo"'+(ok ? '' : ' disabled')+'>Rebirth</button></div>'+
     '<div class="sgrid" style="margin-top:6px">'+RB_PERKS.map(([id,nm,d]) => { const l = S.rbs[id]||0;
@@ -1663,9 +1685,12 @@ $('upBtnNav').addEventListener('click', () => toggleUp());
 $('upClose').addEventListener('click', () => toggleUp(false));
 $('upGrid').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; const u = UPGRADES.find(x => x.id === b.dataset.up), l = S.up[u.id]||0, c = u.cost(l);
   if (S.scrap < c || l >= u.max) return; S.scrap -= c; S.up[u.id] = l+1; sfx('coin'); refreshPilot(); note(u.n+' upgraded to Lv '+(l+1)+'!', '#7ee08a'); save(); renderUp(); });
-const CODES = {MECHWARS:{scrap:500, t:'+500 scrap'}, DRAGON:{part:[4,6], t:'a free Epic Ember part'}, CLAUDE:{scrap:1500, t:'+1500 scrap'}, ZOOM:{train:60, t:'+60 speed training'}, LUCKY:{part:[5,1], t:'a free Legendary Junk part'}, STARS:{part:[6,8], t:'a free Mythic Star part'}};
+// redeem codes are stored as hashes, so they can't simply be read from the page source (MECHWARS is the public starter code)
+const hash32 = t => { let h = 0x811c9dc5; for (const ch of unescape(encodeURIComponent(t))){ h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); };
+const codeKey = c => hash32('mw:' + c);
+const CODES = {'e545fa9f':{scrap:500, t:'+500 scrap'}, 'd909103e':{part:[4,6], t:'a free Epic Ember part'}, '3c87ebb7':{scrap:1500, t:'+1500 scrap'}, 'e7600012':{train:60, t:'+60 speed training'}, '7a453a2b':{part:[5,1], t:'a free Legendary Junk part'}, 'e4b6d266':{part:[6,8], t:'a free Mythic Star part'}};
 function redeem(){
-  const c = $('codeIn').value.trim().toUpperCase(), d = CODES[c];
+  const c = $('codeIn').value.trim().toUpperCase(), d = CODES[codeKey(c)];
   if (!d){ $('codeMsg').textContent = 'That code does not exist.'; sfx('error'); return; }
   if (S.codes.includes(c)){ $('codeMsg').textContent = 'You already used that code.'; return; }
   S.codes.push(c);
@@ -1679,7 +1704,7 @@ $('codeIn').addEventListener('keydown', e => { if (e.key === 'Enter') redeem(); 
 function toggleCodes(force){
   if (!$('ovChoice').hidden || !$('ovDead').hidden || !$('ovStart').hidden) return;
   const on = force === undefined ? $('ovCodes').hidden : force;
-  if (on){ for (const o of ['ovBay','ovIndex','ovSkins','ovUp']) showOv(o, false); save(); $('saveCode').value = 'MW1:'+btoa(unescape(encodeURIComponent(JSON.stringify(S)))); $('saveMsg').textContent = ''; $('codeMsg').textContent = 'Try MECHWARS to start.'; }
+  if (on){ for (const o of ['ovBay','ovIndex','ovSkins','ovUp']) showOv(o, false); save(); { const b = btoa(unescape(encodeURIComponent(JSON.stringify(S)))); $('saveCode').value = 'MW2:'+b+'.'+hash32('save:'+b); } $('saveMsg').textContent = ''; $('codeMsg').textContent = 'Try MECHWARS to start.'; }
   showOv('ovCodes', on);
 }
 $('codesBtn').addEventListener('click', () => toggleCodes());
@@ -1687,9 +1712,12 @@ $('codesClose').addEventListener('click', () => toggleCodes(false));
 $('saveCopy').addEventListener('click', async () => { const t = $('saveCode').value; try { await navigator.clipboard.writeText(t); $('saveMsg').textContent = 'Copied! Paste it into the game on your other computer.'; } catch(e){ $('saveCode').select(); try { document.execCommand('copy'); $('saveMsg').textContent = 'Copied!'; } catch(err){ $('saveMsg').textContent = 'Select the code and copy it with Ctrl+C.'; } } });
 $('saveLoad').addEventListener('click', () => {
   const t = $('saveCode').value.trim();
-  try { if (!t.startsWith('MW1:')) throw 0; const ns = JSON.parse(decodeURIComponent(escape(atob(t.slice(4))))); if (!ns || !Array.isArray(ns.parts)) throw 0;
+  try { let b;
+    if (t.startsWith('MW2:')){ const k = t.lastIndexOf('.'); b = t.slice(4, k); if (k < 0 || hash32('save:'+b) !== t.slice(k+1)) throw 1; }
+    else if (t.startsWith('MW1:')) b = t.slice(4); else throw 0;
+    const ns = JSON.parse(decodeURIComponent(escape(atob(b)))); if (!ns || !Array.isArray(ns.parts)) throw 0;
     localStorage.setItem(KEY, JSON.stringify(ns)); removeEventListener('beforeunload', save); $('saveMsg').textContent = 'Loaded! Restarting...'; setTimeout(() => location.reload(), 400);
-  } catch(e){ $('saveMsg').textContent = 'That save code is not valid. Copy the whole code, starting with MW1:'; }
+  } catch(e){ $('saveMsg').textContent = e === 1 ? 'That save code is damaged or was changed. Copy the whole code again.' : 'That save code is not valid. Copy the whole code, starting with MW2:'; }
 });
 // ---------- treadmill minigames: each win trains speed and pays scrap ----------
 const MG = [
@@ -3894,7 +3922,7 @@ let VIGK = 0, HUDK = 1;
 function drawHUD(){
   const k = S.bigText ? 1.25 : 1; W = 640/k; H = 360/k; HUDK = k;
   if (VIGK !== k){ VIGNETTE = null; VIGK = k; }
-  try { drawHUDInner(); if (!BIGMAP){ tutHUD(); stealHUD(); } } finally { W = 640; H = 360; }
+  try { drawHUDInner(); if (!BIGMAP){ tutHUD(); stealHUD(); streakHUD(1/60); } } finally { W = 640; H = 360; }
 }
 function drawHUDInner(){
   const hk = hud.width/640*HUDK; ctx.setTransform(hk,0,0,hk,0,0); ctx.imageSmoothingEnabled = true;
