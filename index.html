@@ -3092,6 +3092,52 @@ function rig(bt, x, z, yaw, o){
     fn(bt,a,b,(ly+L0)*s,sx*s,sy*s,sz*s,yaw+(dyaw||0),col,mode,pitch); };
   const ZN = o.zones || {};
   // every zone's parts carry that zone's look: rust, vines, sand fins, ice, chrome neon, flames, void orbs, stars
+  const part0 = part;
+  // area kits: every area also changes the mech's SHAPE. Each piece starts inside the body part it grows from, so nothing floats.
+  const kit = (sl, q) => {
+    const a = ZN[sl]; if (!a || o.ghost) return; const S_ = AREA_SKIN[a], T_ = S_.tr, G_ = S_.gl;
+    const part = (fn,lx,ly,lz,sx,sy,sz,...r) => part0(fn,lx,ly,lz,sx*1.6,sy*1.6,sz*1.6,...r);   // kit pieces are big enough to change the silhouette
+    if (sl === 'Head'){ const hb = q.hb;
+      if (a === 1){ part0(box,-0.4,hb+2.8,0,7.8,1.3,7.7,'#3a2e24'); for (const sd of [-1,1]){ part0(cyl,3.5,hb+2.6,sd*1.7,2.4,2,2.4,'#2a2018',0,Math.PI/2); part0(cyl,4.6,hb+2.8,sd*1.7,1.7,0.5,1.7,G_,1,Math.PI/2); } }   // welding goggles
+      if (a === 2) for (let k=0;k<4;k++) part(box,-0.8-k*0.9,hb+4.4,(k-1.5)*1.3,1.3,5.6-k*0.4,0.5,k%2 ? '#4f9a35' : '#78c24a',0,-0.6-k*0.12);   // leaf crest
+      if (a === 3) for (const sd of [-1,1]) for (let k=0;k<4;k++) part(box,-0.6-k*0.9,hb+4.2+k*0.9-(k>2?1.4:0),sd*(3+k*0.8),1.8,1.8,1.6,k%2 ? '#d8c6a0' : '#bfa57a',0,0.3+k*0.4,sd*0.3);   // ram horns
+      if (a === 4) for (let k=0;k<5;k++) part(box,-0.6+Math.cos(k*1.26)*2.2,hb+4.6,Math.sin(k*1.26)*2.6,1.2,3+(k%2)*2.4,1.2,'#bfe8ff',0,-0.15+Math.cos(k*1.26)*0.25);   // ice crown
+      if (a === 5) for (const sd of [-1,1]){ part(box,-1.6,hb+4.6,sd*2.2,4.6,0.5,0.6,'#262c3c',0,0.9); part(box,-3.4,hb+8,sd*2.2,0.6,1.4,0.7,G_,1,0.9); }   // antenna fins
+      if (a === 6){ part(box,-0.4,hb+4.8,0,1.8,6,1.8,'#2a1915',0,-0.35); part(box,-2.1,hb+10,0,1.1,2.2,1.1,G_,1,-0.35); for (const sd of [-1,1]) part(box,-0.6,hb+4.6,sd*2.6,1.2,3.4,1.2,'#3a221c',0,-0.2,sd*0.5); }   // volcanic horn
+      if (a === 7) for (let k=0;k<3;k++) part(box,-0.8,hb+4.4,(k-1)*2.2,1.3,4.8-Math.abs(k-1)*1.4,1.3,G_,1,-0.25,(k-1)*0.4);   // void crystal crown
+      if (a === 8){ part(cyl,-0.6,hb+3.6,3.6,1.2,2.4,1.2,'#9aa3b8'); part(cyl,-0.6,hb+5.6,4.4,4,0.6,4,'#d8dcef',0,0.5); part(cyl,-1,hb+4.6,-3.4,0.5,6,0.5,'#9aa3b8'); part(sph,-1,hb+10.4,-3.4,1,1,1,G_,1); }   // dish and antenna
+    }
+    if (sl === 'Torso'){ const ty_ = q.ty;
+      if (a === 1) for (const sd of [-1,1]){ part(cyl,-5,ty_+9,sd*3.2,2,8.6,2,'#4a3a2c'); part(cyl,-5,ty_+17.2,sd*3.2,2.6,1,2.6,'#2a2018'); }   // exhaust stacks
+      if (a === 2) for (let k=0;k<5;k++) part(box,5.2,ty_+4+k*1.9,-4+k*2,0.6,1.1,2.6,k%2 ? '#4f9a35' : '#78c24a',0,0,0.6);   // vine across the chest
+      if (a === 3){ for (let k=0;k<6;k++) part(box,5.1,ty_+3.6+k*1.6,-4.6+k*1.9,0.7,1.2,2,'#5a3a22',0,0,-0.7); for (let k=0;k<5;k++) part(box,5.5,ty_+4.4+k*1.6,-3.8+k*1.9,0.6,1.4,0.6,'#e0b040'); }   // bandolier
+      if (a === 4) for (let k=0;k<8;k++){ const an = k/8*6.283; part(box,Math.cos(an)*4.6,ty_+12.6,Math.sin(an)*5.6,3.4,2.8,3,k%2 ? '#f4f8fc' : '#dfe8f2',0,0,-an); }   // fur collar
+      if (a === 5){ for (const sd of [-1,1]) part(box,-5.4,ty_+3,sd*2.6,0.6,10,0.7,G_,1); part(cyl,-6,ty_+6,0,3,6,3,'#262c3c'); part(cyl,-6.2,ty_+7,0,3.3,0.6,3.3,G_,1); }   // neon tubes and coil
+      if (a === 6){ for (let k=0;k<4;k++) part(box,5.3,ty_+3.4+k*2.2,(k%2 ? 1 : -1)*1.6,0.4,2.6,0.5,G_,1,0,(k%2 ? 0.6 : -0.6)); for (const sd of [-1,1]) part(box,-5,ty_+9,sd*3,2.4,6,2.4,'#2a1915',0,0.25); }   // lava cracks, vents
+      if (a === 7) for (let k=0;k<3;k++) part(box,-5,ty_+7+k*0.8,(k-1)*3,1.6,7-Math.abs(k-1)*2,1.6,G_,1,0.5,(k-1)*0.3);   // void crystals on the back
+      if (a === 8 && !q.wings) for (const sd of [-1,1]) part(box,-5.6,ty_+9,sd*7,0.5,6,7,'#2a4a9a',0,0.15,sd*0.35);   // solar panels
+    }
+    if (sl === 'Arms'){ const sy = q.sy + 2.2, lz = q.lz, ld = q.ld;   // grow out of the top of the shoulder
+      if (a === 1){ part(cyl,-1.6,sy+0.4,lz+ld*1.4,1.4,5,1.4,'#4a3a2c'); part(box,1.2,sy+0.6,lz+ld*2.8,3,2.4,0.4,'#86684a',0,0.3); }   // pipe and welded patch
+      if (a === 2) for (let k=0;k<2;k++) part(box,-1+k*1.6,sy+0.6,lz+ld*(2+k*0.8),1.4,6-k,0.5,k ? '#4f9a35' : '#78c24a',0,-0.3,ld*0.5);   // leaf fronds
+      if (a === 3){ part(box,0,sy+0.4,lz+ld*2.4,4.2,3.4,3.8,'#c8834a',0,0.3,0.5); part(box,0.6,sy+3.2,lz+ld*2.4,2.6,1.6,2.4,'#e6b984',0,0.3,0.5); }   // canyon rock
+      if (a === 4) for (let k=0;k<3;k++) part(box,-1.2+k*1.4,sy+0.6,lz+ld*(1.8+k*0.5),1.1,4.4-k*0.9,1.1,'#bfe8ff',0,-0.3+k*0.2,ld*0.4);   // ice shards
+      if (a === 5){ part(box,0,sy+1.8,lz+ld*1.6,7.6,0.5,0.6,G_,1); part(box,-1,sy+1.6,lz+ld*2,4,3.2,0.5,'#262c3c',0,0.4); }   // neon edge and fin
+      if (a === 6) for (let k=0;k<2;k++){ part(box,-0.8+k*1.8,sy+0.8,lz+ld*1.8,1.8,4.4-k,1.8,'#2a1915',0,-0.2,ld*0.4); part(box,-1.6+k*1.8,sy+5,lz+ld*(1.8+ld*0),1,1.4,1,G_,1,-0.2,ld*0.4); }   // volcanic spikes
+      if (a === 7) for (let k=0;k<2;k++) part(box,-0.6+k*1.6,sy+0.6,lz+ld*(1.8+k*0.6),1.3,4.6-k,1.3,G_,1,-0.25,ld*0.5);   // void crystals
+      if (a === 8){ if (ld < 0){ part(cyl,-1,sy+0.6,lz+ld*1.6,1,3,1,'#9aa3b8'); part(cyl,-1,sy+3.2,lz+ld*1.6,4.4,0.6,4.4,'#d8dcef',0,0.6); } else part(box,-2,sy+0.6,lz+ld*2.6,5,0.4,4,'#2a4a9a',0,0.4); }   // dish or solar panel
+    }
+    if (sl === 'Legs'){ const kx = q.kx, ky = q.ky, a2 = q.a2, lz = q.lz;
+      if (a === 1){ segAt(box,kx,ky,a2,2.4,2.2,3,0.5,3.6,lz,'#86684a'); segAt(sph,kx,ky,a2,3,2.6,0.6,0.6,0.6,lz,'#c9d2e3'); }   // welded patch
+      if (a === 2) for (const t of [2,4.6]) segAt(box,kx,ky,a2,t,0,0.8,4.8,5,lz,'#4f9a35');   // vines wrapped round the shin
+      if (a === 3) part0(box,kx+0.8,ky-2.8,lz,4.6,3.6,5.2,'#c8834a',0,0.3);   // sandstone knee guard
+      if (a === 4) segAt(box,kx,ky,a2,5.4,0,1.8,5.4,5.6,lz,'#f4f8fc');   // fur boot top
+      if (a === 5) segAt(box,kx,ky,a2,1,2.5,5.6,0.35,0.5,lz,G_,1);   // neon strip
+      if (a === 6) for (const t of [1.4,3.6]) segAt(box,kx,ky,a2,t,2.5,1.6,0.35,0.5,lz,G_,1,);   // lava cracks
+      if (a === 7) part0(box,kx+1.4,ky-1.2,lz,1.3,4,1.3,G_,1,-0.6);   // knee crystal
+      if (a === 8) segAt(box,kx,ky,a2,2,2.5,3.6,0.4,2.6,lz,T_);   // station stripe
+    }
+  };
   const deco = (sl, lx, ly, lz, k) => {
     return;   // zone trinkets floated in the air around the mech; turned off
     const zn = ZN[sl]; if (!zn) return; k = k || 1; const ph2 = clock*2 + lx + lz;
@@ -3186,7 +3232,7 @@ function rig(bt, x, z, yaw, o){
     if (K.Legs === 'Thruster Legs' || jet){ const tx = kx + Math.sin(a2)*6 - 2.8, tyy = ky - Math.cos(a2)*6;
       part(cyl,tx,tyy-1.5,lz,2.4,3,2.4,'#2a2e36'); part(sph,tx-0.4,tyy-2.4,lz,1.8,1.8,1.8,o.dashing ? '#ffd23f' : gl,1);
       if (o.dashing) part(sph,tx-1.4,tyy-8,lz,2.4,6,2.4,'#ffb347',1); }
-    if (A.Legs) deco('Legs',kx+2,ky+1,lz,0.7);
+    if (A.Legs && biped) kit('Legs', {kx, ky, a2, lz});
   };
   if (jet && sh.Torso){ // flying mech: swept wings and twin jet engines on the back
     const wc = A.Legs || '#c9d2e3', fl = o.flying ? Math.sin(clock*10)*0.08 : 0;
@@ -3299,7 +3345,7 @@ function rig(bt, x, z, yaw, o){
     }
     if (A.Torso){
       const pc0 = () => plate('Torso');
-      deco('Torso',-5,ty+15,-4.4,0.9); deco('Torso',-5,ty+15,4.4,0.9);
+      kit('Torso', {ty, wings: tr('Torso') === 8 || jet});
       if (K.Torso === 'Drone Bay'){ part(box,-8,ty+9,0,2.4,6,8,shade(dk,1.3)); part(sph,-9.4,ty+15,0,4,3,4,'#e8eef7'); }
       if (K.Torso === 'Vampire Frame') for (const b of [-4,0,4]) part(box,5.4,ty+12.4,b,0.8,3,0.8,'#ff3b3b',1,-0.3);
       if (K.Torso === 'Reactive Plate') for (const [a,b] of [[-1,-3.5],[1,-3.5],[-1,3.5],[1,3.5]]) part(box,5.8,ty+9.6+a*1.4,b,0.6,1,2.2,'#ff6a2a',1);
@@ -3371,7 +3417,7 @@ function rig(bt, x, z, yaw, o){
       if (K.Arms === 'Hydraulic Arms' && d !== 2) segAt(cyl,0,sy0,a1,0.5,-1.8,5.5,1,1,lz,'#b7c0cf');
       if (K.Arms === 'Drone Arms'){ part(cyl,0,sy+4.6,lz,10,0.6,10,'#5a6070'); part(box,0,sy+5.1,lz,11,0.4,1.4,'#c9d2e0',0,0,clock*25); }
       // Repair Arms: no floating cross (it hovered above the shoulder)
-      if (A.Arms) deco('Arms',0,sy+6,lz+ld,0.9);
+      if (A.Arms) kit('Arms', {sy, lz, ld});
     };
     for (const [lz0,pp] of [[-8.4,la],[8.4,ra]]){
       const lz = o.pilot ? lz0 : Math.sign(lz0)*9.8;
@@ -3487,6 +3533,7 @@ function rig(bt, x, z, yaw, o){
         for (const sd of [-1,1]) for (const k of [0,1]) part(box,-1.8-k*1.2,hb+3.8+k*1.4,sd*(3.4+k*0.6),4.2-k*1.2,0.5,1.8,k ? D.tr : D.hi,0,0.7);   // side wings
         for (let k=0;k<16;k++){ const an = k/16*6.283 + clock*0.4; part(box,-1.2+Math.cos(an)*4.8,hb+10.6,Math.sin(an)*4.8,1.9,0.5,0.7,gl,1,0,-an); }   // halo ring
       }
+      if (!o.pilot && A.Head) kit('Head', {hb});
       if (hk === 'Sensor Dome') part(sph,-0.8,hb+4.6,0,3.6,2.8,3.6,gl,1);
       if (hk === 'Crown Visor') for (const [a2,b2] of [[-2.4,-2.2],[-2.4,2.2],[-0.6,0]]) part(box,a2,hb+4.6,b2,1.2,a2 === -0.6 ? 6.4 : 5.2,1.2,'#ffd23f',1);
     }
