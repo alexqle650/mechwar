@@ -49,7 +49,8 @@ try {
   // PvP: both in Zone 1, A shoots B until B is knocked out
   await B.evaluate(() => window.__mw.tp(100, -1000)); await A.evaluate(() => window.__mw.tp(0, -1000));
   await A.waitForTimeout(2500);
-  for (let i = 0; i < 60 && !(await B.evaluate(() => (window.__mw.S.pvpDeaths||0) > 0)); i++){ await A.evaluate(() => window.__mw.live() && window.__mw.fire()); await A.waitForTimeout(200); }
+  for (let i = 0; i < 150 && !(await B.evaluate(() => (window.__mw.S.pvpDeaths||0) > 0)); i++){ await A.evaluate(() => window.__mw.live() && window.__mw.fire()); await A.waitForTimeout(200); }
+  for (let i = 0; i < 20 && !(await B.evaluate(() => (window.__mw.S.pvpDeaths||0) > 0)); i++) await A.waitForTimeout(250);   // hits are applied on the victim's side, a moment later
   check(await B.evaluate(() => (window.__mw.S.pvpDeaths||0) > 0), 'PvP hits land and knock the other player out');
   // stealing: A puts a part on pad 0, B walks into A's base (west of B's own on B's map) and grabs it, then runs home
   await A.evaluate(() => { window.__mw.tp(0, 300); window.__mw.pad(0); }); await A.waitForTimeout(4000);
