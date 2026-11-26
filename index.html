@@ -2853,6 +2853,7 @@ function rig(bt, x, z, yaw, o){
   const ZN = o.zones || {};
   // every zone's parts carry that zone's look: rust, vines, sand fins, ice, chrome neon, flames, void orbs, stars
   const deco = (sl, lx, ly, lz, k) => {
+    return;   // zone trinkets floated in the air around the mech; turned off
     const zn = ZN[sl]; if (!zn) return; k = k || 1; const ph2 = clock*2 + lx + lz;
     if (zn === 1){ part(sph,lx,ly-0.6*k,lz,2.4*k,1.4*k,2*k,'#8a5a3a'); part(sph,lx+1.4*k,ly-0.4*k,lz-1.2*k,1.2*k,1.2*k,1.2*k,'#b7c0cf'); part(box,lx-0.6*k,ly-0.3*k,lz+1.2*k,2*k,0.6*k,0.6*k,'#6a4a32'); }
     else if (zn === 2){ for (let i=0;i<3;i++){ const an = i*2.1 + 0.4; part(sph,lx+Math.cos(an)*1.6*k,ly-0.5*k+i*0.4*k,lz+Math.sin(an)*1.6*k,2.6*k,0.9*k,1.5*k,i%2?'#4fb04a':'#79d35a'); } part(sph,lx,ly+0.6*k,lz,1*k,1*k,1*k,'#ff7ad9',1); }
@@ -2876,7 +2877,7 @@ function rig(bt, x, z, yaw, o){
   if (biped) for (const [lz, pp, phl] of [[-3.9, sw, ph], [3.9, -sw, ph + Math.PI]]){
     const kb = 0.3 + Math.max(0, Math.cos(phl))*0.75*amp, a1 = pp + kb*0.55, a2 = pp - kb*0.55;
     LEGS.push({lz, a1, a2, reach: Math.cos(a1)*LEG1 + Math.cos(a2)*LEG2 + FOOT}); }
-  const hipY = biped ? Math.max(...LEGS.map(l => l.reach)) : !mech ? 10 : K.Legs === 'Tank Treads' ? 11 : hover ? 14 : K.Legs === 'Spider Legs' ? 13 : 16;
+  const hipY = biped ? Math.max(...LEGS.map(l => l.reach)) : !mech ? 10 : K.Legs === 'Tank Treads' ? 11 : hover ? 11 : K.Legs === 'Spider Legs' ? 13 : 16;
   HIP = hipY;
   const ty = biped ? hipY + (1-amp)*Math.sin(clock*2.2)*0.3 : hipY + (mech ? bob : bob);
   // a box or cylinder hanging from a joint at angle a: 'start' along the limb, 'off' to the front of it
@@ -2955,16 +2956,22 @@ function rig(bt, x, z, yaw, o){
   }
   if (sh.Legs){
     if (hover){
-      for (const lz of [-3.6,3.6]){ part(sph,0,2.2+bob*0.4,lz,8,4.4,6.4,o.dark); part(cyl,0,1.2+bob*0.4,lz,5,1,5,A.Legs||'#5fe0ff',1); part(cyl,0,6,lz,3.4,ty-6,3.4,shade(o.dark,1.2)); }
+      const lc = A.Legs || shade(o.body,1.04);
+      for (const lz of [-4,4]){ part(sph,0,1.6+bob*0.4,lz,9,5,7.4,o.dark); part(cyl,0,0.9+bob*0.4,lz,6,1.2,6,A.Legs||'#5fe0ff',1);   // thruster pods
+        part(cyl,0,3.6,lz,5.6,ty-3,5.6,shade(o.dark,1.2)); part(box,0.6,3.8,lz + (lz > 0 ? 1.6 : -1.6),7,ty-4.5,2,lc); part(box,2.8,4.4,lz,1.6,ty-6,5.4,shade(lc,1.15)); }   // thick armoured struts
+      part(box,0,ty-2.2,0,9,3.6,12,o.dark);   // hip block joins the struts to the torso
       sph(ALPHA, x, z, 0.3, 26*s, 2*s, 26*s, 0, A.Legs||'#5fe0ff', 5);
     } else if (K.Legs === 'Tank Treads'){
       for (const lz of [-4.6, 4.6]){ part(box,0,0,lz,17,6.5,4.4,o.dark); part(box,0,6.5,lz,15,1,4.6,A.Legs||'#5a6070');
         for (const lx of [-6,-2,2,6]) part(sph,lx + ((ph*3) % 4) - 2,1.5,lz + (lz>0?2.3:-2.3),3.6,3.6,1,'#2a2e36'); }
       part(box,0,6,0,8,4.5,7,o.dark);
     } else if (K.Legs === 'Spider Legs'){
-      part(sph,0,6,0,10,6,10,o.dark);
-      for (let k=0;k<4;k++){ const la = (k+0.5)/4*6.283, lift = Math.max(0, Math.sin(ph + k*1.57))*3*amp, kx = Math.cos(la)*9, kz = Math.sin(la)*9;
-        part(box,kx*0.55,8.5,kz*0.55,9,1.6,1.6,o.dark); part(box,kx,lift,kz,1.8,9.5,1.8,A.Legs||o.dark); }
+      const lc = A.Legs || shade(o.body,1.04);
+      part(sph,0,5.5,0,12,8,12,o.dark); part(cyl,0,10,0,9,3,9,lc);
+      for (let k=0;k<4;k++){ const la = (k+0.5)/4*6.283, lift = Math.max(0, Math.sin(ph + k*1.57))*3*amp, cx = Math.cos(la), cz = Math.sin(la), R2 = 10.5;
+        for (let j=1;j<=4;j++){ const t = j/4; part(sph,cx*R2*t,8 + t*5,cz*R2*t,3.6,3.6,3.6,j===4 ? shade(lc,1.15) : o.dark); }   // thigh: a chain of joints up to the knee
+        part(box,cx*R2,lift + 1,cz*R2,3.2,12.5 - lift,3.2,lc); part(box,cx*(R2+1.4),lift + 4,cz*(R2+1.4),1.4,7,2.6,shade(lc,1.2));   // shin and plate
+        part(sph,cx*R2,lift + 0.6,cz*R2,4,2.2,4,o.dark); }   // foot
     } else if (biped){
       for (const L of LEGS) mechLeg(L);
     } else {
@@ -3109,7 +3116,7 @@ function rig(bt, x, z, yaw, o){
       }
       if (K.Arms === 'Hydraulic Arms' && d !== 2) segAt(cyl,0,sy0,a1,0.5,-1.8,5.5,1,1,lz,'#b7c0cf');
       if (K.Arms === 'Drone Arms'){ part(cyl,0,sy+4.6,lz,10,0.6,10,'#5a6070'); part(box,0,sy+5.1,lz,11,0.4,1.4,'#c9d2e0',0,0,clock*25); }
-      if (K.Arms === 'Repair Arms'){ part(box,0,sy+4.6,lz+ld,1.4,1,4,'#7ee08a',1); part(box,0,sy+4.6,lz+ld,4,1,1.4,'#7ee08a',1); }
+      // Repair Arms: no floating cross (it hovered above the shoulder)
       if (A.Arms) deco('Arms',0,sy+6,lz+ld,0.9);
     };
     for (const [lz0,pp] of [[-8.4,la],[8.4,ra]]){
@@ -3220,8 +3227,8 @@ function rig(bt, x, z, yaw, o){
         for (const sd of [-1,1]) part(box,-1.6,hb+4,sd*3.6,4.6,0.5,2,D.hi,0,0.7);
         for (let k=0;k<14;k++){ const an = k/14*6.283 + clock*0.4; part(sph,-0.6+Math.cos(an)*4.6,hb+10.4,Math.sin(an)*4.6,0.9,0.9,0.9,gl,1); }
       }
-      if (hk === 'Sensor Dome') part(sph,-0.8,hb+6.6,0,3.6,2.6,3.6,gl,1);
-      if (hk === 'Crown Visor') for (const [a2,b2] of [[-2.4,-2.2],[-2.4,2.2],[-0.6,0]]) part(box,a2,hb+7.4,b2,1.2,a2 === -0.6 ? 3.6 : 2.4,1.2,'#ffd23f',1);
+      if (hk === 'Sensor Dome') part(sph,-0.8,hb+4.6,0,3.6,2.8,3.6,gl,1);
+      if (hk === 'Crown Visor') for (const [a2,b2] of [[-2.4,-2.2],[-2.4,2.2],[-0.6,0]]) part(box,a2,hb+4.6,b2,1.2,a2 === -0.6 ? 6.4 : 5.2,1.2,'#ffd23f',1);
     }
     if (!o.pilot && A.Head) deco('Head',-0.6,ty+24.6,0,1);
     if (o.antenna){ const ab = o.pilot ? ty+17 : ty+20.6; part(cyl,-1.6,ab,2.4,0.7,o.pilot ? 6 : 5,0.7,'#2a2e36'); part(sph,-1.6,ab+(o.pilot ? 5.5 : 4.6),2.4,o.pilot ? 2.2 : 1.2,o.pilot ? 2.2 : 1.2,o.pilot ? 2.2 : 1.2,o.pilot ? '#ff4a4a' : G,1); }
