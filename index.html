@@ -855,7 +855,10 @@ function mission(t, n){
 }
 let missionFlash = 0, hitMark = 0, dmgFlash = 0;
 function note(text, col){ notes.push({text, col:col||'#e8eef7', t:6}); if (notes.length>6) notes.shift(); }
-function floater(x,y,text,col,h,size){ const big = text[0] === '+'; floaters.push({x,y,h:h||34,text:big ? text.toUpperCase()+'!' : text,col,life:big ? 1.3 : size ? 1.1 : 0.9, size:size || (big ? 16 : 8)}); }
+function floater(x,y,text,col,h,size){ const big = text[0] === '+';
+  const m = big && /^\+(\d+) scrap$/i.exec(text);   // scrap popups close together add up into one, instead of stacking into an unreadable line
+  if (m) for (const f of floaters) if (f.sum && f.life > 0.5 && Math.hypot(f.x - x, f.y - y) < 260){ f.sum += +m[1]; f.text = '+' + f.sum + ' SCRAP!'; f.life = 1.3; f.size = Math.min(24, 16 + Math.log2(f.n = (f.n||1) + 1)*2); return; }
+  floaters.push({sum: m ? +m[1] : 0, x,y,h:h||34,text:big ? text.toUpperCase()+'!' : text,col,life:big ? 1.3 : size ? 1.1 : 0.9, size:size || (big ? 16 : 8)}); }
 let hitStop = 0, flashT = 0, flashCol = '#ffffff', combo = 0, comboT = 0, comboBest = 0;
 function flash(col, t){ flashCol = col; flashT = Math.max(flashT, t || 0.35); }
 const xpNeed = l => Math.round(60*Math.pow(1.22, l-1));
@@ -865,7 +868,8 @@ function addXp(n){
     S.scrap += bonus; ST = stats(); flash('#ffd23f', 0.5); sfx('power'); ring(P.x, P.y, '#ffd23f', 90); burst(P.x, P.y, '#ffd23f', 30, 220);
     note('LEVEL UP! You are level '+S.lvl+'. +1% damage, +'+bonus+' scrap', '#ffd23f'); }
 }
-function burst(x,y,col,n,spd,dull){ for (let k=0;k<(n||10);k++){ const a=R()*6.283, s=rr(20,spd||120); parts.push({x,y,h:rr(4,18),vh:rr(30,150),vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rr(0.4,0.8),max:0.8,col,s:ri(1,3),dull}); } }
+function burst(x,y,col,n,spd,dull){ if (parts.length > 650) n = Math.ceil((n||10)/3);   // keep big fights smooth
+  for (let k=0;k<(n||10);k++){ const a=R()*6.283, s=rr(20,spd||120); parts.push({x,y,h:rr(4,18),vh:rr(30,150),vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rr(0.4,0.8),max:0.8,col,s:ri(1,3),dull}); } }
 function ring(x,y,col,rad,dull){ parts.push({x,y,h:2,vh:0,vx:0,vy:0,life:0.35,max:0.35,col,ring:rad,dull}); }
 
 /* ================= crates ================= */
@@ -2622,16 +2626,19 @@ class Batch { constructor(n){ this.a = new Float32Array(STRIDE*n); this.n = 0; }
     const a = this.a, o = this.n*STRIDE;
     a[o]=x; a[o+1]=y; a[o+2]=z; a[o+3]=sx; a[o+4]=sy; a[o+5]=sz; a[o+6]=yaw; a[o+7]=r; a[o+8]=g; a[o+9]=b; a[o+10]=m; a[o+11]=pt||0; this.n++;
   } }
-class BSet { constructor(n){ this.b = new Batch(n); this.c = new Batch(n>>1); this.s = new Batch(n>>1); } reset(){ this.b.reset(); this.c.reset(); this.s.reset(); } }
-const STATIC = new BSet(8192), DYN = new BSet(4096), ALPHA = new BSet(512), SKY = new BSet(4);
+// small spheres and cylinders (particles, coins, joints, lights) go to low-poly batches: they look the same at that size and cost far less
+class BSet { constructor(n, small){ this.b = new Batch(n); this.c = new Batch(n>>1); this.s = new Batch(n>>1); this.small = !!small; if (small){ this.sS = new Batch(n>>1); this.cS = new Batch(n>>2); } }
+  reset(){ this.b.reset(); this.c.reset(); this.s.reset(); if (this.small){ this.sS.reset(); this.cS.reset(); } } }
+const STATIC = new BSet(8192), DYN = new BSet(4096, true), ALPHA = new BSet(512, true), SKY = new BSet(4);
+const SMALL_S = 9, SMALL_C = 6;
 const rgbCache = new Map();
 function rgb(c){ if (Array.isArray(c)) return c; if (typeof c !== 'string') return [0.6,0.6,0.65]; let v = rgbCache.get(c); if (!v){ const n = parseInt(c.slice(1),16); v = [(n>>16)/255, (n>>8&255)/255, (n&255)/255]; rgbCache.set(c,v); } return v; }
 // x,z = centre on the ground plane (game x,y), base = bottom height, sx forward, sy height, sz side
 let GOX = 0;   // x offset applied while drawing a copy of the base
 function box(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch){ const c = rgb(col); bt.b.push(x+GOX, base, z, sx, sy, sz, yaw||0, c[0], c[1], c[2], mode||0, pitch||0); }
 let BLOCKY = false;
-function cyl(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch){ const c = rgb(col); if (BLOCKY && mode !== 3 && mode !== 4) return box(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch); bt.c.push(x+GOX, base, z, sx, sy, sz, yaw||0, c[0], c[1], c[2], mode||0, pitch||0); }
-function sph(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch){ const c = rgb(col); if (BLOCKY && mode !== 4 && mode !== 5) return box(bt, x, z, base, sx*0.85, sy*0.85, sz*0.85, yaw, col, mode, pitch); bt.s.push(x+GOX, base, z, sx, sy, sz, yaw||0, c[0], c[1], c[2], mode||0, pitch||0); }
+function cyl(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch){ const c = rgb(col); if (BLOCKY && mode !== 3 && mode !== 4) return box(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch); (bt.small && sx < SMALL_C && sz < SMALL_C ? bt.cS : bt.c).push(x+GOX, base, z, sx, sy, sz, yaw||0, c[0], c[1], c[2], mode||0, pitch||0); }
+function sph(bt, x, z, base, sx, sy, sz, yaw, col, mode, pitch){ const c = rgb(col); if (BLOCKY && mode !== 4 && mode !== 5) return box(bt, x, z, base, sx*0.85, sy*0.85, sz*0.85, yaw, col, mode, pitch); (bt.small && sx < SMALL_S && sy < SMALL_S && sz < SMALL_S ? bt.sS : bt.s).push(x+GOX, base, z, sx, sy, sz, yaw||0, c[0], c[1], c[2], mode||0, pitch||0); }
 // horizontal barrel starting at (x,z) at height h, pointing along yaw
 function barrel(bt, x, z, h, yaw, L, r, col, mode){ cyl(bt, x, z, h - L, r*2, L, r*2, yaw, col, mode, Math.PI/2); }
 function shadow(x, z, r){ cyl(ALPHA, x, z, 0.12, r, 0.1, r, 0, '#000000', 3); }
@@ -2683,7 +2690,8 @@ function initGL(){
     gl.bindVertexArray(null); return vao;
   };
   for (const set of ['STATIC','DYN','ALPHA','SKY']){ VAO[set] = {}; BUF[set] = {};
-    for (const k of ['b','c','s']){ const ib = gl.createBuffer(); BUF[set][k] = ib; VAO[set][k] = mk(k, ib); if (k !== 'b') VAO[set][k+'L'] = mk(k+'L', ib); } }
+    for (const k of ['b','c','s']){ const ib = gl.createBuffer(); BUF[set][k] = ib; VAO[set][k] = mk(k, ib); if (k !== 'b') VAO[set][k+'L'] = mk(k+'L', ib); }
+    if (set === 'DYN' || set === 'ALPHA') for (const k of ['c','s']){ const ib = gl.createBuffer(); BUF[set][k+'S'] = ib; VAO[set][k+'S'] = mk(k+'L', ib); } }
   MK_VAO = mk;
   gl.enable(gl.DEPTH_TEST);
   return true;
@@ -2757,10 +2765,12 @@ function fxEnd(){
   gl.activeTexture(gl.TEXTURE0); gl.enable(gl.DEPTH_TEST); gl.bindVertexArray(null);
 }
 let BLOCKY_NOFX = false;
-function upload(name, set, usage){ for (const k of ['b','c','s']){ gl.bindBuffer(gl.ARRAY_BUFFER, BUF[name][k]); gl.bufferData(gl.ARRAY_BUFFER, set[k].a.subarray(0, set[k].n*STRIDE), usage); } }
+function upload(name, set, usage){ for (const k of set.small ? ['b','c','s','cS','sS'] : ['b','c','s']){ gl.bindBuffer(gl.ARRAY_BUFFER, BUF[name][k]); gl.bufferData(gl.ARRAY_BUFFER, set[k].a.subarray(0, set[k].n*STRIDE), usage); } }
 function drawSet(name, set){ const lo = GFX.fast && name !== 'SKY';
   for (const k of ['b','c','s']){ if (!set[k].n) continue; const mk = lo && k !== 'b' ? k+'L' : k;
-    gl.uniform1i(U.uKind, k === 'b' ? 0 : k === 'c' ? 1 : 2); gl.bindVertexArray(VAO[name][mk]); gl.drawArraysInstanced(gl.TRIANGLES, 0, MESH[mk].count, set[k].n); } }
+    gl.uniform1i(U.uKind, k === 'b' ? 0 : k === 'c' ? 1 : 2); gl.bindVertexArray(VAO[name][mk]); gl.drawArraysInstanced(gl.TRIANGLES, 0, MESH[mk].count, set[k].n); }
+  if (set.small) for (const k of ['c','s']){ const n = set[k+'S'].n; if (!n) continue;
+    gl.uniform1i(U.uKind, k === 'c' ? 1 : 2); gl.bindVertexArray(VAO[name][k+'S']); gl.drawArraysInstanced(gl.TRIANGLES, 0, MESH[k+'L'].count, n); } }
 // ---------- scenery in chunks: low-poly, and chunks beyond the far plane are skipped ----------
 const CHUNK = 1500, CHUNKS = [];
 function uploadStatic(){
