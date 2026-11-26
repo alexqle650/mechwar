@@ -1100,7 +1100,7 @@ function killEnemy(e){
   if (e.kind === 'boss'){ bossDown(e); return; }
   sfx('kill'); if (e.r > 14) sfx('boom');
   mission('kill'); if (isNight) mission('night');
-  burst(e.x,e.y,'#ffb347',26,180); burst(e.x,e.y,'#555',10,90); ring(e.x,e.y,'#ffdd88',30*e.sc);
+  burst(e.x,e.y,'#ffb347',26,180); burst(e.x,e.y,'#555',10,90); ring(e.x,e.y,'#ffdd88',30*e.sc); spillDebris(e);
   const reward = Math.round(3*e.tier*e.tier*ESIZE[e.size||1].rw * (P.inMech ? ST.scrapMul : 1));
   S.scrap += reward; S.kills++; killStreak(e); addXp(Math.round((4 + 3*e.tier) * ESIZE[e.size||1].rw)); if ((e.size||1) >= 3) hitStop = Math.max(hitStop, 0.08);
   floater(e.x, e.y, '+'+reward+' scrap', '#ffcf3a', 46*e.sc); spillCoins(e.x, e.y, Math.min(12, 3 + (e.size||1)*2 + (e.elite ? 4 : 0)));
@@ -1110,11 +1110,29 @@ function killEnemy(e){
     if (R() < 0.5){ const p = newPart(e.tier); note('You stole '+p.name+' (+'+p.power+') from the rival!', TIERS[p.tier].c); givePart(p); }
   }
   if (e.mod === 'Volatile') volatileBurst(e);
+  if (e.golden) goldenDown(e);
   if (e.elite){ const p = newPart(Math.min(NR, rollRarity(e.zone||e.tier) + 1), null, e.zone||e.tier); giveLoot([p], 40*e.tier*e.tier, 'ELITE DESTROYED! Bonus loot:'); }
   if (e.mini){ minis[e.zone] = {at: clock + 180}; const z = e.zone; addXp(120*z); flash('#ff9a2e', 0.4);
     giveLoot([newPart(Math.min(NR, rollRarity(z) + 1), null, z), newPart(Math.min(NR, rollRarity(z) + 2), null, z)], 150*z*z, 'MINI-BOSS DOWN: '+e.name+'! It comes back in 3 minutes.'); }
   if (e.wave && wave === e.wave) onWaveKill();
 }
+// debris: destroyed bots break into tumbling chunks that bounce and fade
+let debris = [];
+function spillDebris(e){
+  const C = CREATURE[e.zone] || {}, body = e.golden ? '#ffcf3a' : C.body || '#8a8f99', dark = C.dark || '#3a3d44', glow = C.glow || '#ffb347';
+  const n = Math.min(14, 5 + (e.size||1)*3); if (debris.length > 120) debris.splice(0, n);
+  for (let k=0;k<n;k++){ const a = R()*6.283, sp = rr(40, 160)*Math.sqrt(e.sc), sz = rr(2, 4.6)*e.sc;
+    debris.push({x:e.x + rr(-e.r, e.r)*0.4, y:e.y + rr(-e.r, e.r)*0.4, h:rr(6, 26)*e.sc, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, vh:rr(80, 220),
+      yaw:R()*6, pit:R()*6, sy:rr(-8,8), sp_:rr(-10,10), sx:sz, sz:sz*rr(0.5,1.2), sh:sz*rr(0.4,0.9), col:k%4 === 0 ? glow : k%2 ? body : dark, glow:k%4 === 0, t:0, life:rr(2.2, 3.2)}); }
+}
+function debrisTick(dt){
+  if (!debris.length) return;
+  for (const d of debris){ d.t += dt; d.vh -= 520*dt; d.h += d.vh*dt; d.x += d.vx*dt; d.y += d.vy*dt; d.yaw += d.sy*dt; d.pit += d.sp_*dt;
+    if (d.h < d.sh/2){ d.h = d.sh/2; if (Math.abs(d.vh) > 40){ d.vh = -d.vh*0.35; d.vx *= 0.6; d.vy *= 0.6; d.sy *= 0.5; d.sp_ *= 0.5; } else { d.vh = 0; d.vx *= 0.85; d.vy *= 0.85; d.sy *= 0.85; d.sp_ = 0; d.pit = Math.round(d.pit/1.571)*1.571; } } }
+  debris = debris.filter(d => d.t < d.life);
+}
+function drawDebris(bt){ for (const d of debris){ const k = d.t > d.life - 0.5 ? (d.life - d.t)/0.5 : 1;
+  box(bt, d.x, d.y, d.h - d.sh/2*k, d.sx*k, d.sh*k, d.sz*k, d.yaw, d.col, d.glow && d.t < 1.2 ? 1 : 0, d.pit); } }
 // scrap coins: a burst of coins that fly into you after a kill (the scrap itself is already counted)
 let coins = [];
 function spillCoins(x, y, n){ for (let k=0;k<n;k++){ const a = R()*6.283, sp = rr(60, 170); coins.push({x, y, h:rr(8,20), vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, vh:rr(60,140), t:0, spin:R()*6}); } }
@@ -1127,6 +1145,66 @@ function coinTick(dt){
   coins = coins.filter(c => !c.done && c.t < 4); if (got) sfx('coin');
 }
 function drawCoins(bt){ for (const c of coins) cyl(bt, c.x, c.y, c.h, 4.2, 1.1, 4.2, 0, '#ffcf3a', 1, Math.PI/2 + Math.sin(clock*9 + c.spin)*0.6); }
+// world events: every few minutes out in a zone something happens: a meteor shower or a golden bot to chase down
+const EV = {next: 150, cur: null};
+function eventTick(dt){
+  if (EV.cur){ EV.cur.t += dt; const E = EV.cur;
+    if (E.kind === 'meteor'){
+      if (E.left > 0 && E.t >= E.nextAt){ E.left--; E.nextAt = E.t + rr(0.8, 1.6);
+        const a = R()*6.283, r = rr(60, 380); let x = P.x + Math.cos(a)*r, y = P.y + Math.sin(a)*r; if (zoneAt(x, y) !== E.z) { x = P.x; y = P.y - 120; }
+        E.rocks.push({x, y, t:0, land:1.6, done:false}); sfx('warn'); }
+      for (const m of E.rocks) if (!m.done){ m.t += dt; if (m.t >= m.land){ m.done = true; meteorHit(m, E.z); } }
+      E.rocks = E.rocks.filter(m => !m.done || m.t < m.land + 0.1);
+      if (E.left <= 0 && !E.rocks.length) endEvent('The meteor shower is over.');
+    } else if (E.kind === 'golden'){
+      const g = E.bot; if (!g || g.dead){ endEvent(null); return; }
+      if (E.t > 40){ despawn(g); endEvent('The golden bot got away!'); return; }
+      if (R() < dt*8) parts.push({x:g.x + rr(-g.r, g.r), y:g.y + rr(-g.r, g.r), h:rr(4, 30), vh:30, vx:0, vy:0, life:0.6, max:0.6, col:'#ffcf3a'});
+    }
+    if (zoneAt(P.x, P.y) !== E.z && E.kind === 'meteor'){ E.left = 0; }
+    return;
+  }
+  const z = zoneAt(P.x, P.y);
+  if (!z || arenaAt(P.x, P.y) || P.dead || BIGMAP || S.tut < 6) return;
+  EV.next -= dt; if (EV.next > 0) return;
+  EV.next = rr(150, 240); startEvent(R() < 0.5 ? 'meteor' : 'golden', z);
+}
+function startEvent(kind, z){
+  if (kind === 'meteor'){ EV.cur = {kind, z, t:0, left:8, nextAt:2, rocks:[]}; flash('#ff9a2e', 0.3);
+    note('METEOR SHOWER! Scrap meteors are falling. Stand clear of the red circles, then grab the loot.', '#ff9a2e'); sfx('roar'); }
+  else { const a = R()*6.283; let x = P.x + Math.cos(a)*320, y = P.y + Math.sin(a)*320; if (zoneAt(x, y) !== z){ x = P.x; y = P.y - 300; }
+    const g = makeEnemy('guard', z, x, y, {zone:z, size:2, noRole:true, noElite:true, quiet:true, hpm:1.6});
+    g.golden = true; g.spd *= 1.7; g.name = 'Golden Bot'; g.fireT = 99; g.aggro = 99;
+    EV.cur = {kind, z, t:0, bot:g}; sfx('chime'); flash('#ffcf3a', 0.3);
+    note('A GOLDEN BOT appeared! It runs away and vanishes in 40 seconds. Catch it for a jackpot!', '#ffcf3a'); }
+}
+function endEvent(msg){ EV.cur = null; if (msg) note(msg, '#c9d2e3'); }
+function meteorHit(m, z){
+  burst(m.x, m.y, '#ff7a1a', 30, 240); burst(m.x, m.y, '#555', 14, 120); ring(m.x, m.y, '#ffb347', 70); sfx('boom'); shake = Math.max(shake, 3);
+  if (!P.dead && Math.hypot(P.x - m.x, P.y - m.y) < 46) hurtPlayer((CS().maxhp||60)*0.18, null);
+  for (const e of enemies) if (!e.dead && e.kind !== 'boss' && Math.hypot(e.x - m.x, e.y - m.y) < 46 + e.r) hurtEnemy(e, e.max*0.5, false);
+  const sc = Math.round(12*z*z*rbScrap()); S.scrap += sc; floater(m.x, m.y, '+'+sc+' scrap', '#ffcf3a', 20); spillCoins(m.x, m.y, 8);
+  if (R() < 0.22){ const p = newPart(Math.min(NR, rollRarity(z) + 1), null, z); giveLoot([p], 0, 'A meteor had a part inside!'); }
+}
+function goldenDown(e){
+  const z = e.zone, sc = Math.round(150*z*z*rbScrap()); EV.cur = null;
+  flash('#ffcf3a', 0.5); hitStop = Math.max(hitStop, 0.1); spillCoins(e.x, e.y, 30);
+  giveLoot([newPart(Math.min(NR, rollRarity(z) + 2), null, z)], sc, 'JACKPOT! You caught the golden bot:');
+}
+function drawEvent(bt){
+  const E = EV.cur; if (!E) return;
+  if (E.kind === 'meteor') for (const m of E.rocks){ const k = Math.min(1, m.t/m.land), on = Math.floor(clock*10)%2 === 0;
+    cyl(ALPHA, m.x, m.y, 0.6, 92*k, 1, 92*k, 0, '#ff3b3b', 5); if (on) cyl(bt, m.x, m.y, 0.4, 8, 1, 8, 0, '#ff3b3b', 1);
+    const hh = (1 - k)*520 + 10; sph(bt, m.x + (1-k)*120, m.y, hh, 16, 16, 16, 0, '#3a2a22'); sph(bt, m.x + (1-k)*120 + 6, m.y, hh + 4, 12, 12, 12, 0, '#ff7a1a', 1);
+    for (let j=1;j<5;j++) sph(bt, m.x + (1-k)*120 + j*9, m.y, hh + j*26, 10 - j*1.8, 10 - j*1.8, 10 - j*1.8, 0, j < 3 ? '#ffb347' : '#ff7a1a', 1); }
+  if (E.kind === 'golden' && E.bot && !E.bot.dead){ const g = E.bot; cyl(ALPHA, g.x, g.y, 0.5, g.r*4, 1, g.r*4, 0, '#ffcf3a', 5);
+    box(bt, g.x, g.y, 0, 3, 140, 3, 0, '#ffcf3a', 1); }
+}
+function eventHUD(){
+  const E = EV.cur; if (!E) return;
+  if (E.kind === 'golden' && E.bot) text('GOLDEN BOT  ' + Math.max(0, Math.ceil(40 - E.t)) + 'S  ' + Math.round(dist(E.bot, P)/10) + 'M', W/2, 52, '#ffcf3a', 8, 'center');
+  if (E.kind === 'meteor') text('METEOR SHOWER: ' + (E.left + E.rocks.length) + ' LEFT', W/2, 52, '#ff9a2e', 8, 'center');
+}
 // kill streaks: kills close together build up a streak with a bonus and a big callout
 let streak = 0, streakT = 0, streakShow = null;
 const STREAK = [null, null, 'DOUBLE KILL', 'TRIPLE KILL', 'QUAD KILL', 'RAMPAGE', 'UNSTOPPABLE', 'MECH GOD'];
@@ -1190,6 +1268,8 @@ function updateEnemies(dt){
         e.ang = Math.atan2(P.y-e.y, P.x-e.x);
       } else if (Math.hypot(e.home.x-e.x, e.home.y-e.y) > 14){ tx=e.home.x; ty=e.home.y; e.ang=Math.atan2(ty-e.y,tx-e.x); }
     }
+    if (e.golden && alive){ const a = Math.atan2(e.y-P.y, e.x-P.x) + Math.sin(clock*0.7 + e.born)*0.9;   // the golden bot runs away, weaving
+      tx = e.x + Math.cos(a)*100; ty = e.y + Math.sin(a)*100; shoot = false; e.ang = Math.atan2(ty-e.y, tx-e.x); e.slow = dp > 520; }
     if (tx !== null){
       let dx = tx-e.x, dy = ty-e.y; const d = Math.hypot(dx,dy) || 1; dx/=d; dy/=d;
       if (e.strafeT > 0){ e.strafeT -= dt; const sx=-dy*e.sd, sy=dx*e.sd; dx=dx*0.25+sx; dy=dy*0.25+sy; }
@@ -1245,7 +1325,7 @@ function giveLoot(list, scrap, header){
   for (const p of list){ note('+ '+p.name+' ('+p.slot+', +'+p.power+')', TIERS[p.tier].c); givePart(p); if (p.tier >= 5){ flash(TIERS[p.tier].c, 0.45); note(TIERS[p.tier].r.toUpperCase()+' DROP!', TIERS[p.tier].c); } }
   addXp(6*list.length + 4);
   scrap = Math.round(scrap * (P.inMech ? ST.scrapMul : 1));
-  S.scrap += scrap; note('+'+scrap+' scrap', '#c9d2e3');
+  S.scrap += scrap; if (scrap > 0) note('+'+scrap+' scrap', '#c9d2e3');
   if (lootChip){ lootChip = false; if (S.core < 50){ S.core++; note('CORE CHIP! Free core upgrade (now Lv '+S.core+')', '#ff4f93'); } }
   ST = stats(); save();
 }
@@ -2289,7 +2369,7 @@ function updateBullets(dt){
   bullets = bullets.filter(b => b.life > 0);
   for (const p of parts){ p.x += p.vx*dt; p.y += p.vy*dt; p.vx *= 0.9; p.vy *= 0.9; p.life -= dt; if (p.vh){ p.h += p.vh*dt; p.vh -= 340*dt; if (p.h < 0){ p.h = 0; p.vh *= -0.35; } } }
   parts = parts.filter(p => p.life > 0);
-  coinTick(dt);
+  coinTick(dt); debrisTick(dt); eventTick(dt);
   for (const f of floaters){ f.h += 22*dt; f.life -= dt; }
   floaters = floaters.filter(f => f.life > 0);
   for (const b of bolts) b.t -= dt;
@@ -3622,7 +3702,7 @@ function buildDynamic(){
   for (const c of crates) if (Math.abs(c.x-P.x) < 1100 && Math.abs(c.y-P.y) < 1100) drawCrateDyn(bt, c);
   for (const e of enemies) drawEnemyDyn(bt, e);
   drawPlayerDyn(bt);
-  drawRemoteDyn(bt); drawFriendBaseDyn(bt); drawMotes(bt); lockDyn(bt); drawCoins(bt);
+  drawRemoteDyn(bt); drawFriendBaseDyn(bt); drawMotes(bt); lockDyn(bt); drawCoins(bt); drawDebris(bt); drawEvent(bt);
   // treadmill belts
   if (P.y > 900) for (const t of TREADS) for (let k=0;k<6;k++){ const zz = t.y - 48 + ((k*16 + clock*70) % 96); box(bt, t.x, zz, 6.1, 40, 0.4, 3, 0, '#1a1c22'); }
   // portals (zone side and arena exits)
@@ -3936,7 +4016,7 @@ let VIGK = 0, HUDK = 1;
 function drawHUD(){
   const k = S.bigText ? 1.25 : 1; W = 640/k; H = 360/k; HUDK = k;
   if (VIGK !== k){ VIGNETTE = null; VIGK = k; }
-  try { drawHUDInner(); if (!BIGMAP){ tutHUD(); stealHUD(); streakHUD(1/60); } } finally { W = 640; H = 360; }
+  try { drawHUDInner(); if (!BIGMAP){ tutHUD(); stealHUD(); streakHUD(1/60); eventHUD(); } } finally { W = 640; H = 360; }
 }
 function drawHUDInner(){
   const hk = hud.width/640*HUDK; ctx.setTransform(hk,0,0,hk,0,0); ctx.imageSmoothingEnabled = true;
