@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // a test-only hook so the test can read and nudge game state (never shipped: added to the page in memory)
 const HOOK = `window.__mw = {P, S, NET, get R(){ return NET.R; }, tp:(x,y)=>{P.x=x;P.y=y;},
-  build:(tier,area)=>{ S.parts.length = 0; for (const sl of SLOTS){ const p = newPart(tier, sl, area, 1); S.parts.push(p); S.eq[sl] = p.id; }
+  build:(tier,area)=>{ S.parts.length = 0; for (const sl of SLOTS){ const p = newPart(tier, sl, area, 1); if (sl === 'Weapon'){ const it = ITEMS.find(i => i.slot === 'Weapon' && i.k === 'Blaster'); p.name = it.name; p.area = it.area; } S.parts.push(p); S.eq[sl] = p.id; }   // a gun, not a random melee weapon
     S.mechBuilt = true; ST = stats(); MECH.state='parked'; MECH.x=P.x; MECH.y=P.y; enterMech(); MECH.hp = ST.maxhp; },
   fire:()=>{ P.aim = Math.atan2(NET.R.y - P.y, NET.R.x - P.x); fire(); }, live:()=>pvpLive(), PADS, LOCK, pad:(i)=>{ const q = newPart(4, 'Head', 1, 1); S.parts.push(q); S.pads[i] = q.id; NET.baseT = 0; return q.name; }};
 /* ================= loop ================= */`;
