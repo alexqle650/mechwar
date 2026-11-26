@@ -12,7 +12,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOOK = `window.__mw = {P, S, NET, get R(){ return NET.R; }, tp:(x,y)=>{P.x=x;P.y=y;},
   build:(tier,area)=>{ S.parts.length = 0; for (const sl of SLOTS){ const p = newPart(tier, sl, area, 1); S.parts.push(p); S.eq[sl] = p.id; }
     S.mechBuilt = true; ST = stats(); MECH.state='parked'; MECH.x=P.x; MECH.y=P.y; enterMech(); MECH.hp = ST.maxhp; },
-  fire:()=>{ P.aim = Math.atan2(NET.R.y - P.y, NET.R.x - P.x); fire(); }, live:()=>pvpLive()};
+  fire:()=>{ P.aim = Math.atan2(NET.R.y - P.y, NET.R.x - P.x); fire(); }, live:()=>pvpLive(), PADS, LOCK, pad:(i)=>{ const q = newPart(4, 'Head', 1, 1); S.parts.push(q); S.pads[i] = q.id; NET.baseT = 0; return q.name; }};
 /* ================= loop ================= */`;
 const page = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').replace('/* ================= loop ================= */', HOOK);
 const server = http.createServer((req, res) => {
@@ -51,6 +51,19 @@ try {
   await A.waitForTimeout(2500);
   for (let i = 0; i < 60 && !(await B.evaluate(() => (window.__mw.S.pvpDeaths||0) > 0)); i++){ await A.evaluate(() => window.__mw.live() && window.__mw.fire()); await A.waitForTimeout(200); }
   check(await B.evaluate(() => (window.__mw.S.pvpDeaths||0) > 0), 'PvP hits land and knock the other player out');
+  // stealing: A puts a part on pad 0, B walks into A's base (west of B's own on B's map) and grabs it, then runs home
+  await A.evaluate(() => { window.__mw.tp(0, 300); window.__mw.pad(0); }); await A.waitForTimeout(4000);
+  const nB = await B.evaluate(() => window.__mw.S.parts.length);
+  await B.evaluate(() => { const m = window.__mw, d = m.PADS[0]; m.P.dead = false; m.tp(d.x + m.NET.side*1800, d.y); });
+  await B.waitForTimeout(300); await B.keyboard.press('KeyE'); await B.waitForTimeout(800);
+  check(await B.evaluate(() => !!window.__mw.P.carry) && await A.evaluate(() => window.__mw.S.pads[0] === null), 'a part on a friend\'s pad can be grabbed');
+  await B.evaluate(() => window.__mw.tp(0, 300)); await B.waitForTimeout(1000);
+  check(await B.evaluate(n => !window.__mw.P.carry && window.__mw.S.parts.length === n + 1, nB), 'carrying it home keeps the stolen part');
+  // base lock: A locks, then B can't grab
+  await A.evaluate(() => window.__mw.pad(1)); await A.keyboard.press('KeyL'); await A.waitForTimeout(4000);
+  await B.evaluate(() => { const m = window.__mw, d = m.PADS[1]; m.tp(d.x + m.NET.side*1800, d.y); });
+  await B.waitForTimeout(300); await B.keyboard.press('KeyE'); await B.waitForTimeout(800);
+  check(await A.evaluate(() => window.__mw.S.pads[1] !== null && window.__mw.LOCK.until > 0) && await B.evaluate(() => !window.__mw.P.carry), 'a locked base can\'t be robbed');
   check(errors.length === 0, 'no errors on either page' + (errors.length ? ': ' + errors.join(' | ') : ''));
 } finally { await browser.close(); server.close(); }
 console.log(failed ? `${failed} check(s) failed` : 'all checks passed');

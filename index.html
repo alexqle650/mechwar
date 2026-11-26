@@ -267,7 +267,7 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
           <p class="label">Hints</p><div class="btns"><button class="btn" id="hintBtn">Control hints: On</button><button class="btn" id="tutBtn">Restart guide</button></div>
         </div>
         <p class="label" style="margin-top:12px">Controls</p>
-        <p class="body" style="font-size:.85rem;margin:0;line-height:1.5">Move WASD · Aim with the mouse · Shoot: click or hold · Zoom: wheel · Turn camera: right-drag, Z / C · Q pulse · Space dodge or leg ability · E buy, open, grab · R get in or out of your mech · B workshop · I index · K skins · U upgrades · L lock your base · P multiplayer · M sound · N world map · F / G / H fight, flee or yard a crate · Esc pause</p>
+        <p class="body" style="font-size:.85rem;margin:0;line-height:1.5">Move WASD · Aim with the mouse · Shoot: click or hold · Zoom: wheel · Turn camera: right-drag, Z / C · Q pulse · Space dodge or leg ability · E buy, open, steal · R get in or out of your mech · B workshop · I index · K skins · U upgrades · L lock your base · P multiplayer · M sound · N world map · F / G / H fight, flee or yard a crate · Esc pause</p>
         <div class="btns" style="margin-top:10px"><button class="btn" id="quitBtn">Back to title</button></div>
       </div>
     </div>
@@ -1370,7 +1370,7 @@ function updateBase(dt){
     const pad = PADS[i];
     if (!P.dead && Math.abs(P.x-pad.x) < 24 && Math.abs(P.y-pad.y) < 24 && S.padCash[i] >= 1){
       const c = Math.floor(S.padCash[i]); S.scrap += c; S.padCash[i] -= c;
-      floater(pad.x, pad.y, '+'+c+' scrap', '#ffcf3a', 30);
+      floater(pad.x, pad.y, '+'+c+' scrap', '#ffcf3a', 30); burst(pad.x, pad.y, '#ffcf3a', Math.min(16, 4 + c/10|0), 120); sfx('coin');
     }
   }
 }
@@ -1413,7 +1413,8 @@ addEventListener('keydown', e => {
   if (e.code==='KeyG') choose(false);
   if (e.code==='KeyH') choose('yard');
   if (e.code==='KeyQ') pulse();
-  if (e.code==='KeyE') tryBuy();
+  if (e.code==='KeyE' && !tryStealOrBuy()) tryBuy();
+  if (e.code==='KeyL') toggleLock();
   if (e.code==='KeyR') enterMech();
   if (e.code==='Space') ability();
   if ((e.code==='ShiftLeft' || e.code==='ShiftRight') && !paused()) setShiftLock(!shiftLock);
@@ -2054,7 +2055,7 @@ function updatePlayer(dt){
   if (P.fly){ P.fuel -= dt/fuelTime; if (P.fuel <= 0){ P.fuel = 0; P.fly = false; note('Out of fuel! Landing.', '#ff8c7a'); } }
   else P.fuel = Math.min(1, P.fuel + dt/5);
   P.lift = (P.lift||0) + ((P.fly ? 46 : 0)*mS()/1.45 - (P.lift||0))*Math.min(1, dt*3.5);
-  const spdMul = (P.odT > 0 && P.inMech ? 1.2 : 1) * trailMul() * trainMul() * (P.fly ? 1.35 : 1);
+  const spdMul = (P.odT > 0 && P.inMech ? 1.2 : 1) * trailMul() * trainMul() * (P.fly ? 1.35 : 1) * (P.carry ? STEAL_SLOW : 1);
   P.x += mx*cs.speed*9*spdMul*dt; P.y += my*cs.speed*9*spdMul*dt;
   if (P.dashT > 0){ const dsp = (P.inMech ? 3.2 : 2.6)*cs.speed*9; P.x += P.dvx*dsp*dt; P.y += P.dvy*dsp*dt; if (P.inMech) burst(P.x, P.y, '#ffb347', 1, 30); }
   if (!(P.lift > 18)) collide(P,true); else collideWalls(P); arenaClamp(P);
@@ -2107,8 +2108,8 @@ function updatePlayer(dt){
   const want = shiftLock ? camYaw : P.shootT > 0 ? aim : (P.moving ? Math.atan2(my, mx) : P.face);
   const rate = shiftLock ? (P.inMech ? 9 : 20) : (P.inMech ? 5 : 13);
   P.face += clamp(angDiff(want, P.face), -rate*dt, rate*dt);
-  if ((firing || touchFire) && flee && P.fireT <= 0){ P.fireT = 0.8; floater(P.x, P.y, 'WEAPONS LOCKED', '#ff8c7a', P.inMech ? 60 : 30); sfx('click'); }
-  if ((firing || touchFire) && !flee && P.fireT <= 0 && Math.abs(angDiff(aim, P.face)) < 0.6){ const wk = P.inMech ? cs.weapon : 'Pilot'; if (wk === 'Minigun') P.spin = Math.min(1, (P.spin||0) + 0.07); P.fireT = cs.cd * (WCD[wk]||1) * (P.odT > 0 && P.inMech ? 0.5 : 1) * (wk === 'Minigun' ? 1.6 - P.spin : 1); fire(); }
+  if ((firing || touchFire) && (flee || P.carry) && P.fireT <= 0){ P.fireT = 0.8; floater(P.x, P.y, 'WEAPONS LOCKED', '#ff8c7a', P.inMech ? 60 : 30); sfx('click'); }
+  if ((firing || touchFire) && !flee && !P.carry && P.fireT <= 0 && Math.abs(angDiff(aim, P.face)) < 0.6){ const wk = P.inMech ? cs.weapon : 'Pilot'; if (wk === 'Minigun') P.spin = Math.min(1, (P.spin||0) + 0.07); P.fireT = cs.cd * (WCD[wk]||1) * (P.odT > 0 && P.inMech ? 0.5 : 1) * (wk === 'Minigun' ? 1.6 - P.spin : 1); fire(); }
   if (P.inMech && ST.repair) P.hp = Math.min(cs.maxhp, P.hp + cs.maxhp*ST.repair*dt);
   if (P.regenT <= 0) P.hp = Math.min(cs.maxhp, P.hp + cs.maxhp*(P.inMech && ST.K.Legs === 'Strider Legs' ? 0.04 : 0.02)*dt);
   if (Math.hypot(P.x-REPAIR.x, P.y-REPAIR.y) < 50) P.hp = Math.min(cs.maxhp, P.hp + cs.maxhp*0.3*dt);
@@ -3480,7 +3481,7 @@ function buildDynamic(){
   for (const c of crates) if (Math.abs(c.x-P.x) < 1100 && Math.abs(c.y-P.y) < 1100) drawCrateDyn(bt, c);
   for (const e of enemies) drawEnemyDyn(bt, e);
   drawPlayerDyn(bt);
-  drawRemoteDyn(bt); drawFriendBaseDyn(bt); drawMotes(bt);
+  drawRemoteDyn(bt); drawFriendBaseDyn(bt); drawMotes(bt); lockDyn(bt);
   // treadmill belts
   if (P.y > 900) for (const t of TREADS) for (let k=0;k<6;k++){ const zz = t.y - 48 + ((k*16 + clock*70) % 96); box(bt, t.x, zz, 6.1, 40, 0.4, 3, 0, '#1a1c22'); }
   // portals (zone side and arena exits)
@@ -3787,7 +3788,7 @@ let VIGK = 0, HUDK = 1;
 function drawHUD(){
   const k = S.bigText ? 1.25 : 1; W = 640/k; H = 360/k; HUDK = k;
   if (VIGK !== k){ VIGNETTE = null; VIGK = k; }
-  try { drawHUDInner(); if (!BIGMAP) tutHUD(); } finally { W = 640; H = 360; }
+  try { drawHUDInner(); if (!BIGMAP){ tutHUD(); stealHUD(); } } finally { W = 640; H = 360; }
 }
 function drawHUDInner(){
   ctx.setTransform(2*HUDK,0,0,2*HUDK,0,0);
@@ -3966,6 +3967,7 @@ function myBase(){
   const now = Date.now(), part = id => { const p = partById(id); return p ? {slot:p.slot, tier:p.tier, name:p.name, area:p.area||1} : null; };
   const parked = MECH.state === 'parked' || MECH.state === 'repair', atHangar = MECH.state === 'repair';
   return {t:'base', pads:S.pads.map(part), yard:S.yard.map(y => y ? {tier:y.tier, supply:!!y.supply, prog:+Math.min(1, (now-y.start)/y.dur).toFixed(3)} : null),
+    lock: myLocked() ? +(LOCK.until - clock).toFixed(0) : 0,
     mech: parked ? {st:MECH.state, x:Math.round(atHangar ? HANGAR.x : MECH.x), y:Math.round(atHangar ? HANGAR.y : MECH.y), f:+(MECH.face||0).toFixed(2)} : null};
 }
 function cleanBase(m){
@@ -3976,12 +3978,13 @@ function cleanBase(m){
     yard.push(y ? {tier:Math.round(num(y.tier,1,NR,1)), supply:!!y.supply, prog:num(y.prog,0,1,0)} : null); }
   let mech = null;
   if (m.mech && typeof m.mech === 'object'){ const y = num(m.mech.y,-1e5,1e5,0); mech = {st:m.mech.st === 'repair' ? 'repair' : 'parked', x:mapIn(num(m.mech.x,-1e5,1e5,0), y), y, f:num(m.mech.f,-50,50,0)}; }
+  if (m.lock > 0) LOCK.friendUntil = Math.max(LOCK.friendUntil, clock + num(m.lock, 0, LOCK_S, 0));
   return {pads, yard, mech};
 }
 function sendState(){
   netSend({t:'s', x:Math.round(P.x), y:Math.round(P.y), f:+(P.face||0).toFixed(2), a:+(P.aim||0).toFixed(2), m:P.inMech?1:0, d:P.dead?1:0,
     fl:P.fly?1:0, sh:P.shootT > 0 || clock < (P.flashT||0) ? 1 : 0, sw:P.swingT > 0 ? +(P.swingT/P.swingMax).toFixed(2) : 0,
-    hp:+clamp(P.hp/(CS().maxhp||1), 0, 1).toFixed(2), sf:clock < (P.pvpSafe||0) ? 1 : 0});
+    hp:+clamp(P.hp/(CS().maxhp||1), 0, 1).toFixed(2), sf:clock < (P.pvpSafe||0) ? 1 : 0, cy:P.carry ? 1 : 0});
 }
 function friendTitle(){ for (const s of signs) if (s.friendTitle) s.text = (NET.R ? NET.R.name : 'FRIEND') + "'S BASE"; }
 function onNetData(m){
@@ -3999,12 +4002,13 @@ function onNetData(m){
   } else if (m.t === 's'){
     const y = num(m.y,-1e5,1e5,0);
     R.tx = mapIn(num(m.x,-1e5,1e5,0), y); R.ty = y; R.face = num(m.f,-50,50,0); R.aim = num(m.a,-50,50,0);
-    R.inMech = !!m.m; R.dead = !!m.d; R.fly = !!m.fl; R.shoot = !!m.sh; R.swing = num(m.sw,0,1,0); R.hp = num(m.hp,0,1,1); R.safe = !!m.sf;
+    R.inMech = !!m.m; R.dead = !!m.d; R.fly = !!m.fl; R.shoot = !!m.sh; R.swing = num(m.sw,0,1,0); R.hp = num(m.hp,0,1,1); R.safe = !!m.sf; R.carry = !!m.cy;
     if (!R.seen){ R.seen = true; R.x = R.tx; R.y = R.ty; }
   } else if (m.t === 'base') NET.base = cleanBase(m);
   else if (m.t === 'hit') pvpTakeHit(m);
   else if (m.t === 'ko') pvpScored();
   else if (m.t === 'fx') netFx(m);
+  else if (['grab','grab-ok','grab-no','steal-done','steal-drop','lock'].includes(m.t)) onSteal(m);
   else if (m.t === 'full') netLeave('That room already has two players.');
   else if (m.t === 'bye') netDropped(R.name + ' left the game.');
 }
@@ -4065,6 +4069,8 @@ async function netJoin(raw){
     netLeave('Couldn\'t connect. The room may be closed, or your network may block direct connections (common on school or work Wi-Fi).'); }, 20000);
 }
 function netDropped(msg){
+  for (const i in HELD) restorePad(+i); if (P.carry){ P.carry = null; note('Lost the link: the part you were carrying went back.', '#ff8c7a'); }
+  LOCK.friendUntil = 0;
   const c = NET.conn; NET.conn = null; NET.R = null; NET.base = null; friendTitle();
   try { if (c) c.close(); } catch(e){}
   note(msg, '#ffcf3a');
@@ -4082,7 +4088,7 @@ function netLeave(msg){
   setNet('offline', msg || 'Not connected.');
 }
 function netTick(dt){
-  pvpTick(dt);
+  pvpTick(dt); lockTick();
   const R = NET.R;
   if (R && R.seen){
     const dx = R.tx-R.x, dy = R.ty-R.y, d = Math.hypot(dx, dy);
@@ -4248,7 +4254,8 @@ function netLabels(){
 const PVP_DMG = 0.3, PVP_CAP = 0.25, PVP_SAFE = 5, PVP_BOUNTY_CD = 120;
 const FOE = {pvp:true, x:0, y:0, r:14, dead:true, size:4, sc:1, hitT:0};
 const inPvpArea = y => y < -24;                       // everything north of the base walls: bridges, zones, arenas
-const pvpLive = () => NET.status === 'online' && !!NET.R && NET.R.seen && !NET.R.dead && !NET.R.safe && !P.dead && inPvpArea(NET.R.y) && inPvpArea(P.y);
+const pvpLive = () => NET.status === 'online' && !!NET.R && NET.R.seen && !NET.R.dead && !NET.R.safe && !P.dead &&
+  ((inPvpArea(NET.R.y) && inPvpArea(P.y)) || (NET.R.carry && inMyBase(NET.R.x, NET.R.y) && inMyBase(P.x, P.y)));   // or: catching a thief in your own base
 const targets = () => FOE.dead ? enemies : enemies.concat(FOE);
 function pvpHit(d, crit){
   if (!pvpLive()) return;
@@ -4259,7 +4266,10 @@ function pvpHit(d, crit){
   floater(FOE.x, FOE.y, crit ? 'CRIT HIT' : 'HIT', crit ? '#ffd23f' : '#ff8c7a', NET.R && NET.R.inMech ? 60 : 28, crit ? 12 : 0);
 }
 function pvpTakeHit(m){
-  if (NET.status !== 'online' || P.dead || !inPvpArea(P.y) || clock < (P.pvpSafe||0)) return;
+  if (NET.status !== 'online' || P.dead || !NET.R) return;
+  if (Math.hypot(NET.R.x - P.x, NET.R.y - P.y) > 1200) return;                // too far away to have hit me
+  if (P.carry){ dropCarry('You got hit and dropped it! The part flew back home.'); return; }   // one hit and you drop it
+  if (!inPvpArea(P.y) || clock < (P.pvpSafe||0)) return;
   const d = Math.min(num(m.d, 0, 1e9, 0)*PVP_DMG, (CS().maxhp || 60)*PVP_CAP);
   if (d > 0) hurtPlayer(d, null, true);
 }
@@ -4317,6 +4327,91 @@ function pvpTick(dt){
     NET.pvpWarned = true;
     note('PvP zone! Outside the bases ' + (R ? R.name : 'your friend') + ' can ambush you, and you can ambush them.', '#ff8c7a');
   }
+}
+// ---------- stealing and base lock ----------
+// Walk into your friend's base and press E at one of their display pads to grab the part. You carry it home slowly and
+// can't shoot; they get an alert and may hit you inside their base: one hit and it flies back. Reach your own base to keep it.
+// L in your own base locks your gate for 60 seconds (cooldown 2 minutes) and stops grabs.
+const LOCK = {until:0, cd:0, friendUntil:0, walls:{}}, HELD = {};   // HELD: my pads a thief is carrying away
+const STEAL_SLOW = 0.6, LOCK_S = 60, LOCK_CD = 120;
+const myLocked = () => clock < LOCK.until, friendLocked = () => clock < LOCK.friendUntil;
+const inMyBase = (x, y) => y > -24 && Math.abs(x) < HUB.w/2 + 24;
+function lockWall(key, on){
+  const sd = NET.side || 0; if (!sd) return;
+  if (!on){ if (LOCK.walls[key]){ removeObs(LOCK.walls[key]); delete LOCK.walls[key]; } return; }
+  if (LOCK.walls[key]) return;
+  const x = key === 'mine' ? (sd > 0 ? HUB.x + HUB.w : HUB.x - 24) : sd*DX + (sd > 0 ? HUB.x - 24 : HUB.x + HUB.w);
+  LOCK.walls[key] = addObs({x, y:DOOR_Y0, w:24, h:DOOR_Y1 - DOOR_Y0, type:'lockwall', col:'#ff3b3b'});
+}
+function lockTick(){
+  lockWall('mine', myLocked() && FRIEND_SIDES.length > 0);
+  lockWall('friend', friendLocked() && FRIEND_SIDES.includes(NET.side));
+  for (const i in HELD) if (clock > HELD[i].until){ restorePad(+i); }
+  if (P.carry && !P.dead && inMyBase(P.x, P.y) && Math.abs(P.x) < HUB.w/2){   // made it home
+    const d = P.carry.p, np = newPart(d.tier, d.slot, d.area, d.size || 1); if (ITEM_BY_NAME[d.name]) np.name = d.name;
+    S.parts.push(np); const free = S.pads.indexOf(null); if (free >= 0){ S.pads[free] = np.id; S.padCash[free] = 0; }
+    netSend({t:'steal-done', i:P.carry.i}); P.carry = null; sfx('chime'); burst(P.x, P.y, '#ffcf3a', 30, 200); ring(P.x, P.y, '#ffcf3a', 60);
+    note('Stolen! ' + np.name + (free >= 0 ? ' is on your display pad now.' : ' is in your inventory.'), '#7ee08a'); save();
+  }
+}
+function toggleLock(){
+  if (NET.status !== 'online'){ note('The base lock is for multiplayer: it stops your friend from stealing.', '#c9d2e3'); return; }
+  if (!inMyBase(P.x, P.y)){ note('Lock your base from inside it.', '#ff8c7a'); return; }
+  if (Object.keys(HELD).length){ note('Get your part back first: hit the thief!', '#ff8c7a'); return; }
+  if (clock < LOCK.cd){ note('Base lock ready in ' + Math.ceil(LOCK.cd - clock) + 's.', '#ff8c7a'); return; }
+  LOCK.until = clock + LOCK_S; LOCK.cd = clock + LOCK_CD; netSend({t:'lock', s:LOCK_S}); sfx('chime');
+  note('Base locked for ' + LOCK_S + ' seconds. Nobody can come in or grab your pads.', '#ff6b6b');
+}
+function stealTarget(){   // a friend's pad within reach, on my map
+  const B = NET.base; if (NET.status !== 'online' || !B || P.carry || P.dead) return -1;
+  const ox = NET.side*DX;
+  for (let i=0;i<6;i++){ if (!B.pads[i]) continue; const pd = PADS[i]; if (Math.hypot(P.x - (pd.x + ox), P.y - pd.y) < 34) return i; }
+  return -1;
+}
+function tryStealOrBuy(){
+  const i = stealTarget();
+  if (i < 0) return false;
+  if (friendLocked()){ note('Their base is locked. Wait it out!', '#ff8c7a'); return true; }
+  netSend({t:'grab', i}); note('Grabbing...', '#ffcf3a'); return true;
+}
+function restorePad(i){ const h = HELD[i]; if (!h) return; delete HELD[i]; if (partById(h.id) && S.pads[i] === null) S.pads[i] = h.id; }
+function onSteal(m){
+  const R = NET.R, nm = R ? R.name : 'Your friend';
+  if (m.t === 'grab'){   // I own the pad
+    const i = Math.round(num(m.i, 0, 5, -1)), p = i >= 0 && partById(S.pads[i]);
+    if (!p || myLocked() || HELD[i]){ netSend({t:'grab-no', why: myLocked() ? 'locked' : 'gone'}); return; }
+    S.scrap += Math.floor(S.padCash[i]); S.padCash[i] = 0; S.pads[i] = null; HELD[i] = {id:p.id, until:clock + 120};
+    netSend({t:'grab-ok', i, p:{slot:p.slot, tier:p.tier, name:p.name, area:p.area || 1, size:p.size || 1}}); NET.baseT = 0;
+    sfx('alarm'); shake = Math.max(shake, 2);
+    note('ALERT! ' + nm + ' grabbed your ' + p.name + '! Hit them inside your base before they get home.', '#ff3b3b');
+  } else if (m.t === 'grab-ok'){
+    const d = m.p || {}; if (!SLOTS.includes(d.slot) || !ITEM_BY_NAME[d.name]) return;
+    P.carry = {i:Math.round(num(m.i, 0, 5, 0)), p:{slot:d.slot, tier:Math.round(num(d.tier, 1, NR, 1)), name:d.name, area:Math.round(num(d.area, 1, NZ, 1)), size:Math.round(num(d.size, 1, 4, 1))}};
+    sfx('coin'); note('Got it! Run it back to your base. You are slow and can\'t shoot. One hit and you drop it!', '#ffcf3a');
+  } else if (m.t === 'grab-no') note(m.why === 'locked' ? 'Their base is locked.' : 'Too late, that pad is empty.', '#ff8c7a');
+  else if (m.t === 'steal-done'){ const i = Math.round(num(m.i, 0, 5, -1)), h = HELD[i]; if (!h) return; delete HELD[i];
+    const k = S.parts.findIndex(q => q.id === h.id); if (k >= 0 && !SLOTS.some(sl => S.eq[sl] === h.id)) S.parts.splice(k, 1);
+    note(nm + ' got away with your part. Steal something back!', '#ff8c7a'); save(); }
+  else if (m.t === 'steal-drop'){ restorePad(Math.round(num(m.i, 0, 5, -1))); note('You got your part back!', '#7ee08a'); sfx('chime'); NET.baseT = 0; }
+  else if (m.t === 'lock'){ LOCK.friendUntil = clock + num(m.s, 0, LOCK_S, 0); note(nm + ' locked their base for ' + LOCK_S + ' seconds.', '#ff8c7a'); }
+}
+function dropCarry(why){
+  if (!P.carry) return; netSend({t:'steal-drop', i:P.carry.i}); P.carry = null;
+  burst(P.x, P.y, '#ffcf3a', 20, 160); note(why || 'You dropped it! The part flew back home.', '#ff8c7a');
+}
+function stealHUD(){
+  if (NET.status !== 'online') return;
+  const i = stealTarget();
+  if (i >= 0){ const p = NET.base.pads[i], [x, y] = [W/2, H/2 + 40]; text(friendLocked() ? 'BASE LOCKED' : 'E: STEAL ' + p.name.toUpperCase(), x, y, friendLocked() ? '#ff6b6b' : '#ffcf3a', 8, 'center'); }
+  if (P.carry) text('CARRYING ' + P.carry.p.name.toUpperCase() + ': GET HOME!', W/2, H/2 + 52, '#ffcf3a', 8, 'center');
+  if (myLocked()) text('YOUR BASE IS LOCKED  ' + Math.ceil(LOCK.until - clock) + 'S', W/2, 40, '#ff6b6b', 8, 'center');
+  else if (inMyBase(P.x, P.y) && NET.R) text(clock < LOCK.cd ? 'LOCK READY IN ' + Math.ceil(LOCK.cd - clock) + 'S' : 'L: LOCK YOUR BASE', W/2, 40, '#c9d2e3', 8, 'center');
+}
+function lockDyn(bt){
+  for (const k in LOCK.walls){ const o = LOCK.walls[k], f = 0.6 + 0.4*Math.sin(clock*6);
+    for (let j=0;j<5;j++) box(bt, o.x + o.w/2, o.y + o.h/2, 4 + j*9 + f*2, 6, 2, o.h, 0, '#ff3b3b', 1); }
+  const R = NET.R; if (R && R.seen && R.carry && !R.dead) box(bt, R.x, R.y, R.inMech ? 62*R.look.sc/1.45 : 30, 10, 10, 10, clock*2, '#ffcf3a', 1);
+  if (P.carry) box(bt, P.x, P.y, P.inMech ? 62*mS()/1.45 : 30, 10, 10, 10, clock*2, '#ffcf3a', 1);
 }
 function netBadge(){
   const pv = (S.pvpKills || S.pvpDeaths) ? '  PVP ' + (S.pvpKills||0) + '-' + (S.pvpDeaths||0) : '';
