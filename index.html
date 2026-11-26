@@ -43,6 +43,9 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
 .stage{position:relative;width:100%;max-width:960px;margin-inline:auto;aspect-ratio:16/9;background:#000;box-shadow:0 0 0 3px var(--line);touch-action:none;user-select:none;-webkit-user-select:none}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:none}
 #hud{pointer-events:none}
+.ach{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px;margin-bottom:8px}
+.ach div{border:2px solid #2a3350;padding:6px 8px;font-size:.78rem;color:#9aa6bd;background:#0d1322}
+.ach div.got{border-color:#ffcf3a;color:#e9edf5}.ach b{display:block;font-size:.85rem;color:inherit}
 .ov[hidden]{display:none!important}
 .ov{position:absolute;inset:0;display:grid;place-items:center;background:rgba(8,10,18,.82);padding:10px;overflow:auto}
 .panel{--edge:var(--hazard);padding:16px 18px;width:min(100%,460px);display:flex;flex-direction:column;gap:10px}
@@ -201,6 +204,8 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
         <p class="body" style="margin:0">Every zone has 27 of its own parts: 4 for each body slot plus Jet Wings, 2 melee, 2 fast ranged and 2 slow ranged weapons. Each part can drop in 8 rarities (the little bars). Every new part and rarity you find pays scrap.</p>
         <div id="idxTabs" class="btns"></div>
         <div id="idxBody" class="idx"></div>
+        <p class="label" style="margin-top:6px">Achievements <span id="achCount"></span></p>
+        <div id="achBody" class="ach"></div>
         <p class="label" style="margin-top:6px">Where they come from</p>
         <div id="idxCrates" class="idxc"></div>
       </div>
@@ -968,6 +973,7 @@ function spawnBoss(i){
   note('BOSS: '+e.name+' has entered the arena!', '#ff5d4a'); sfx('roar'); shake = 4;
 }
 function bossDown(e){
+  S.bossKills = (S.bossKills||0) + 1;
   addXp(250*(e.zone||1)); hitStop = 0.3; flash('#ffffff', 0.6);
   const B = bosses[e.zone]; B.alive = false; B.at = clock + 300; B.e = null;
   sfx('bigboom'); sfx('fanfare'); shake = 6;
@@ -1155,7 +1161,7 @@ function eventTick(dt){
         E.rocks.push({x, y, t:0, land:1.6, done:false}); sfx('warn'); }
       for (const m of E.rocks) if (!m.done){ m.t += dt; if (m.t >= m.land){ m.done = true; meteorHit(m, E.z); } }
       E.rocks = E.rocks.filter(m => !m.done || m.t < m.land + 0.1);
-      if (E.left <= 0 && !E.rocks.length) endEvent('The meteor shower is over.');
+      if (E.left <= 0 && !E.rocks.length){ S.meteors = (S.meteors||0) + 1; endEvent('The meteor shower is over.'); }
     } else if (E.kind === 'golden'){
       const g = E.bot; if (!g || g.dead){ endEvent(null); return; }
       if (E.t > 40){ despawn(g); endEvent('The golden bot got away!'); return; }
@@ -1187,7 +1193,7 @@ function meteorHit(m, z){
   if (R() < 0.22){ const p = newPart(Math.min(NR, rollRarity(z) + 1), null, z); giveLoot([p], 0, 'A meteor had a part inside!'); }
 }
 function goldenDown(e){
-  const z = e.zone, sc = Math.round(150*z*z*rbScrap()); EV.cur = null;
+  const z = e.zone, sc = Math.round(150*z*z*rbScrap()); EV.cur = null; S.goldCaught = (S.goldCaught||0) + 1;
   flash('#ffcf3a', 0.5); hitStop = Math.max(hitStop, 0.1); spillCoins(e.x, e.y, 30);
   giveLoot([newPart(Math.min(NR, rollRarity(z) + 2), null, z)], sc, 'JACKPOT! You caught the golden bot:');
 }
@@ -1209,7 +1215,7 @@ function eventHUD(){
 let streak = 0, streakT = 0, streakShow = null;
 const STREAK = [null, null, 'DOUBLE KILL', 'TRIPLE KILL', 'QUAD KILL', 'RAMPAGE', 'UNSTOPPABLE', 'MECH GOD'];
 function killStreak(e){
-  streak = clock < streakT ? streak + 1 : 1; streakT = clock + 3.2;
+  streak = clock < streakT ? streak + 1 : 1; streakT = clock + 3.2; S.bestStreak = Math.max(S.bestStreak||0, streak);
   if (streak < 2) return;
   const nm = STREAK[Math.min(streak, STREAK.length-1)], bonus = Math.round(5*streak*streak*(e.tier||1)*rbScrap());
   S.scrap += bonus; streakShow = {nm, t:1.6, bonus, n:streak}; sfx('streak');
@@ -1733,7 +1739,47 @@ function toggleUp(force){
   showOv('ovUp', on); if (on) renderUp();
 }
 let idxTier = 1;
+// ---------- achievements: goals with a scrap reward and a toast ----------
+const ACH = [
+  ['build', 'Rolled Out', 'Build your first mech', () => S.mechBuilt, 200],
+  ['k10', 'Scrapper', 'Destroy 10 bots', () => S.kills >= 10, 150],
+  ['k100', 'Bot Breaker', 'Destroy 100 bots', () => S.kills >= 100, 1500],
+  ['k1000', 'Scrap Legend', 'Destroy 1,000 bots', () => S.kills >= 1000, 25000],
+  ['streak3', 'Triple Threat', 'Get a TRIPLE KILL', () => (S.bestStreak||0) >= 3, 400],
+  ['streak5', 'Rampage', 'Get a 5-kill streak', () => (S.bestStreak||0) >= 5, 2500],
+  ['boss1', 'Giant Slayer', 'Beat any boss', () => (S.bossKills||0) >= 1, 3000],
+  ['boss8', 'Champion of the Stars', 'Beat 8 bosses', () => (S.bossKills||0) >= 8, 100000],
+  ['gold', 'Jackpot', 'Catch a golden bot', () => (S.goldCaught||0) >= 1, 2000],
+  ['meteor', 'Stargazer', 'Survive a meteor shower', () => (S.meteors||0) >= 1, 1000],
+  ['set3', 'Matching Outfit', 'Get a set bonus', () => (ST && ST.setN >= 3), 800],
+  ['set6', 'Full Set', 'Wear 6 parts of one design', () => (ST && ST.setN >= 6), 6000],
+  ['leg', 'Shiny!', 'Own a Legendary or better part', () => S.parts.some(p => p.tier >= 5), 2500],
+  ['cel', 'Heavenly', 'Own a Celestial part', () => S.parts.some(p => p.tier >= 8), 50000],
+  ['idx50', 'Collector', 'Find 50 different parts', () => Object.keys(S.found||{}).length >= 50, 5000],
+  ['core20', 'Overcharged', 'Core level 20', () => (S.core||0) >= 20, 4000],
+  ['rb1', 'Born Again', 'Rebirth once', () => (S.rb||0) >= 1, 0],
+  ['pvp', 'Ambush!', 'Knock out a friend in PvP', () => (S.pvpKills||0) >= 1, 1000],
+  ['steal', 'Sticky Fingers', 'Steal a part from a friend', () => (S.steals||0) >= 1, 1000]];
+let achT = 0, achShow = [];
+function achTick(dt){
+  achT -= dt; if (achT > 0) return; achT = 1; if (!S.ach) S.ach = {};
+  for (const [id, n, d, test, rw] of ACH) if (!S.ach[id]){ let ok = false; try { ok = test(); } catch(e){}
+    if (ok){ S.ach[id] = Date.now(); const r = Math.round(rw*rbScrap()); S.scrap += r; achShow.push({n, d, r, t:4}); sfx('fanfare'); save(); } }
+}
+function achHUD(dt){
+  const a = achShow[0]; if (!a) return; a.t -= dt*(achShow.length > 2 ? 3 : 1); if (a.t <= 0){ achShow.shift(); return; }
+  const k = Math.min(1, a.t*2, (4 - a.t)*4), y = 66 - (1-k)*20, w = 230;
+  ctx.globalAlpha = k; px(W/2 - w/2, y, w, 30, 'rgba(10,14,26,.92)'); px(W/2 - w/2, y, w, 2, '#ffcf3a'); px(W/2 - w/2, y + 28, w, 2, '#ffcf3a');
+  text('ACHIEVEMENT: ' + a.n.toUpperCase(), W/2, y + 6, '#ffcf3a', 8, 'center');
+  text(a.d + (a.r ? '  +' + a.r + ' SCRAP' : ''), W/2, y + 18, '#c9d2e3', 8, 'center'); ctx.globalAlpha = 1;
+}
+function renderAch(){
+  const A = S.ach || {}, got = ACH.filter(a => A[a[0]]).length;
+  $('achCount').textContent = got + ' / ' + ACH.length;
+  $('achBody').innerHTML = ACH.map(([id, n, d, , rw]) => '<div class="'+(A[id] ? 'got' : '')+'"><b>'+(A[id] ? '★ ' : '')+n+'</b>'+d+(rw ? ' · '+rw.toLocaleString()+' scrap' : '')+'</div>').join('');
+}
 function renderIndex(){
+  renderAch();
   if (!S.found) S.found = {};
   if (idxTier < 1 || idxTier > NZ) idxTier = 1;
   const anyFound = it => { for (let t=1;t<=NR;t++) if (S.found[it.name+'|'+t]) return true; return false; };
@@ -2070,6 +2116,10 @@ function fire(){
   sfx(!P.inMech ? 'pilot' : {'Rail Cannon':'rail','Sniper':'rail','Scatter Gun':'scatter','Rocket Pod':'rocket','Mortar':'rocket','Tesla Coil':'tesla','Laser':'tesla','Blade':'swing','Spear':'swing','Claws':'swing','Hammer':'swing','Drill':'swing','Whip':'tesla','Flamethrower':'scatter','Boomerang':'swing','Grenade Launcher':'rocket'}[Wk] || 'shoot');
   if (MELEE.includes(Wk)){ startMelee(Wk, cs, dmgNow); return; }
   P.flashT = clock + 0.06; P.recoilK = 1;
+  if (P.inMech && !['Laser','Tesla Coil','Whip','Flamethrower'].includes(Wk) && debris.length < 150){   // spent shell casing flies out to the side
+    const sa = P.aim + Math.PI/2*(R() < 0.5 ? 1 : -1) + rr(-0.3, 0.3), big = ['Rail Cannon','Rocket Pod','Mortar','Grenade Launcher','Sniper'].includes(Wk) ? 1.8 : 1;
+    debris.push({x:m.x - Math.cos(P.aim)*6, y:m.y - Math.sin(P.aim)*6, h:m.h, vx:Math.cos(sa)*rr(50,90), vy:Math.sin(sa)*rr(50,90), vh:rr(90,150), yaw:R()*6, pit:R()*6, sy:rr(-14,14), sp_:rr(-16,16),
+      sx:1.2*big, sz:2.2*big, sh:1.2*big, col:'#d9a441', glow:false, t:0, life:1.4}); }
   if (Wk === 'Rail Cannon'){ shot(P.aim, 950, 0.7, dmgNow*2.6, {pierce:new Set(), rail:true}); shake = Math.max(shake, 1); }
   else if (Wk === 'Sniper'){ shot(P.aim, 1500, 0.6, dmgNow*4.5, {rail:true, sniper:true}); shake = Math.max(shake, 1.4); }
   else if (Wk === 'Scatter Gun') for (let k=-2;k<=2;k++) shot(P.aim + k*0.09 + rr(-0.03,0.03), 540, 0.5, dmgNow*0.45);
@@ -2369,7 +2419,7 @@ function updateBullets(dt){
   bullets = bullets.filter(b => b.life > 0);
   for (const p of parts){ p.x += p.vx*dt; p.y += p.vy*dt; p.vx *= 0.9; p.vy *= 0.9; p.life -= dt; if (p.vh){ p.h += p.vh*dt; p.vh -= 340*dt; if (p.h < 0){ p.h = 0; p.vh *= -0.35; } } }
   parts = parts.filter(p => p.life > 0);
-  coinTick(dt); debrisTick(dt); eventTick(dt);
+  coinTick(dt); debrisTick(dt); eventTick(dt); achTick(dt);
   for (const f of floaters){ f.h += 22*dt; f.life -= dt; }
   floaters = floaters.filter(f => f.life > 0);
   for (const b of bolts) b.t -= dt;
@@ -4016,7 +4066,7 @@ let VIGK = 0, HUDK = 1;
 function drawHUD(){
   const k = S.bigText ? 1.25 : 1; W = 640/k; H = 360/k; HUDK = k;
   if (VIGK !== k){ VIGNETTE = null; VIGK = k; }
-  try { drawHUDInner(); if (!BIGMAP){ tutHUD(); stealHUD(); streakHUD(1/60); eventHUD(); } } finally { W = 640; H = 360; }
+  try { drawHUDInner(); if (!BIGMAP){ tutHUD(); stealHUD(); streakHUD(1/60); eventHUD(); achHUD(1/60); } } finally { W = 640; H = 360; }
 }
 function drawHUDInner(){
   const hk = hud.width/640*HUDK; ctx.setTransform(hk,0,0,hk,0,0); ctx.imageSmoothingEnabled = true;
@@ -4607,7 +4657,7 @@ function lockTick(){
   if (P.carry && !P.dead && inMyBase(P.x, P.y) && Math.abs(P.x) < HUB.w/2){   // made it home
     const d = P.carry.p, np = newPart(d.tier, d.slot, d.area, d.size || 1); if (ITEM_BY_NAME[d.name]) np.name = d.name;
     S.parts.push(np); const free = S.pads.indexOf(null); if (free >= 0){ S.pads[free] = np.id; S.padCash[free] = 0; }
-    netSend({t:'steal-done', i:P.carry.i}); P.carry = null; sfx('chime'); burst(P.x, P.y, '#ffcf3a', 30, 200); ring(P.x, P.y, '#ffcf3a', 60);
+    netSend({t:'steal-done', i:P.carry.i}); P.carry = null; S.steals = (S.steals||0) + 1; sfx('chime'); burst(P.x, P.y, '#ffcf3a', 30, 200); ring(P.x, P.y, '#ffcf3a', 60);
     note('Stolen! ' + np.name + (free >= 0 ? ' is on your display pad now.' : ' is in your inventory.'), '#7ee08a'); save();
   }
 }

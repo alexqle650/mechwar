@@ -16,7 +16,7 @@ Open `index.html` in a browser to play. Progress saves in the browser's localSto
 - 8 zones with their own parts, enemies, mini-bosses and boss arenas (bosses have 3 phases)
 - 8 rarities, each a completely different mech design; wear 3, 5 or 6 parts of one design for a set bonus
 - Enemy roles from Zone 2 (shield, sniper, healer, bomber) and elite modifiers (Swift, Armored, Volatile, Regen)
-- Kill streaks, combos, missions, rebirths, skins, trails, display pads that earn scrap, and a guided start
+- World events (meteor showers, golden bots), 19 achievements in the Index, kill streaks, combos, missions, rebirths, skins, trails, display pads that earn scrap, and a guided start
 
 ## Testing
 Settings (Esc) has **Admin tools** for testing: scrap, full sets of any rarity, speed x2/x4, god mode and instant crates. They change your save.
