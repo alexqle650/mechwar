@@ -43,6 +43,7 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
 .stage{position:relative;width:100%;max-width:960px;margin-inline:auto;aspect-ratio:16/9;background:#000;box-shadow:0 0 0 3px var(--line);touch-action:none;user-select:none;-webkit-user-select:none}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:none}
 #hud{pointer-events:none}
+.steps{margin:6px 0 0;padding-left:1.3em;display:grid;gap:6px}.steps li{line-height:1.45}
 .ach{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px;margin-bottom:8px}
 .ach div{border:2px solid #2a3350;padding:6px 8px;font-size:.78rem;color:#9aa6bd;background:#0d1322}
 .ach div.got{border-color:#ffcf3a;color:#e9edf5}.ach b{display:block;font-size:.85rem;color:inherit}
@@ -141,11 +142,13 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
         <p class="label">Scrapyard pilot program</p>
         <h2>Mech Wars: Crate Clash</h2>
         <div class="body">
-          You are a little robot pilot. First <b>build your mech</b> at the <b>Mech Workshop</b> (follow the cyan arrow): buy parts off the <b>conveyor belt</b>, install one in every slot, then hit Build. Walk up to it and press <b>R</b> to climb in.
-          Put spare parts on <b>display pads</b> to earn scrap. Then stomp north and fight the guardian bots around each crate, then <b>hold E</b> to crack it open.
-          <b>Fight</b> the wave that comes after for bonus loot, or <b>flee</b> with the normal haul.
-          Equip parts in the <b>Mech Bay</b> to raise your Power and open the gates to bigger zones with better crates.
-          Night lasts 1 minute every 10: better crates, angrier bots. Stop <b>Rival Mechs</b> before they steal your crate. Every zone has a <b>boss</b> in its arena, and you always have 3 <b>missions</b> for extra scrap.
+          <ol class="steps">
+            <li><b>Build a mech.</b> Buy parts off the conveyor (E), fill all 6 slots at the Mech Workshop (B), then climb in (R).</li>
+            <li><b>Crack crates.</b> Head north, beat the guard bots, hold <b>E</b> to open. Fight the wave after for bonus loot, or flee with it.</li>
+            <li><b>Get stronger.</b> Better parts raise your Power and open gates to tougher zones with rarer crates and a boss in each.</li>
+            <li><b>Show off.</b> Spare parts on display pads earn scrap. Play with a friend (P) to ambush, steal and team up.</li>
+          </ol>
+          <p style="margin:8px 0 0;color:var(--dim);font-size:.85rem">Space jump · X leg ability · Q pulse · Esc settings. Progress saves in this browser.</p>
         </div>
         <div class="btns"><button class="btn primary" id="playBtn">Play</button></div>
       </div>
@@ -4300,7 +4303,7 @@ function cleanBase(m){
 function sendState(){
   netSend({t:'s', x:Math.round(P.x), y:Math.round(P.y), f:+(P.face||0).toFixed(2), a:+(P.aim||0).toFixed(2), m:P.inMech?1:0, d:P.dead?1:0,
     fl:P.fly?1:0, sh:P.shootT > 0 || clock < (P.flashT||0) ? 1 : 0, sw:P.swingT > 0 ? +(P.swingT/P.swingMax).toFixed(2) : 0,
-    hp:+clamp(P.hp/(CS().maxhp||1), 0, 1).toFixed(2), sf:clock < (P.pvpSafe||0) ? 1 : 0, cy:P.carry ? 1 : 0});
+    hp:+clamp(P.hp/(CS().maxhp||1), 0, 1).toFixed(2), sf:clock < (P.pvpSafe||0) ? 1 : 0, cy:P.carry ? 1 : 0, j:Math.round(P.jh||0)});
 }
 function friendTitle(){ for (const s of signs) if (s.friendTitle) s.text = (NET.R ? NET.R.name : 'FRIEND') + "'S BASE"; }
 function onNetData(m){
@@ -4318,7 +4321,7 @@ function onNetData(m){
   } else if (m.t === 's'){
     const y = num(m.y,-1e5,1e5,0);
     R.tx = mapIn(num(m.x,-1e5,1e5,0), y); R.ty = y; R.face = num(m.f,-50,50,0); R.aim = num(m.a,-50,50,0);
-    R.inMech = !!m.m; R.dead = !!m.d; R.fly = !!m.fl; R.shoot = !!m.sh; R.swing = num(m.sw,0,1,0); R.hp = num(m.hp,0,1,1); R.safe = !!m.sf; R.carry = !!m.cy;
+    R.inMech = !!m.m; R.dead = !!m.d; R.fly = !!m.fl; R.shoot = !!m.sh; R.swing = num(m.sw,0,1,0); R.hp = num(m.hp,0,1,1); R.safe = !!m.sf; R.carry = !!m.cy; R.jh = num(m.j, 0, 80, 0);
     if (!R.seen){ R.seen = true; R.x = R.tx; R.y = R.ty; }
   } else if (m.t === 'base') NET.base = cleanBase(m);
   else if (m.t === 'hit') pvpTakeHit(m);
@@ -4524,8 +4527,10 @@ $('volMus').addEventListener('input', () => { S.mvol = $('volMus').value/100; mu
 $('quitBtn').addEventListener('click', () => { toggleSet(false); save(); showOv('ovStart', true); });
 addEventListener('keydown', e => {
   if (e.code !== 'Escape' || e.target.tagName === 'INPUT') return;
-  if (!$('ovSet').hidden) toggleSet(false);
-  else if (!OVS.some(id => id !== 'ovSet' && !$(id).hidden)) toggleSet(true);
+  if (!$('ovSet').hidden){ toggleSet(false); return; }
+  const CLOSE = {ovBay:'bayClose', ovIndex:'idxClose', ovSkins:'skinClose', ovUp:'upClose', ovCodes:'codesClose', ovNet:'netClose'};
+  for (const id in CLOSE) if (!$(id).hidden){ $(CLOSE[id]).click(); return; }   // Esc closes whatever panel is open
+  if (!OVS.some(id => id !== 'ovSet' && !$(id).hidden)) toggleSet(true);
 });
 // ---------- guided start: six steps with a NEXT line and an arrow ----------
 const TUT = [
@@ -4561,11 +4566,11 @@ function drawRemoteDyn(bt){
   if (Math.abs(R.x-P.x) > 1600 || Math.abs(R.y-P.y) > 1600) return;
   const L = R.look;
   const RG = DSG[Math.max(1, Math.min(8, (L.T||{}).Core || 3))].gl;
-  if (R.inMech) rig(bt, R.x, R.y, R.face, {s:L.sc, body:L.m[0], dark:L.m[1], head:L.m[2], visor:RG, light:RG, glow:RG,
+  if (R.inMech) rig(bt, R.x, R.y, R.face, {lift:(R.fly ? 46*L.sc/1.45 : 0) + (R.jh||0), s:L.sc, body:L.m[0], dark:L.m[1], head:L.m[2], visor:RG, light:RG, glow:RG,
     armor:L.A, tiers:L.T, kinds:L.K, zones:L.Zn, antenna:true, gun:{kind:L.K.Weapon, tier:L.wt, aim:R.aim, col:DSG[Math.max(1, Math.min(8, L.wt||3))].gl, flash:R.shoot && Math.floor(clock*20)%2 === 0},
     walk:R.fly ? 0 : R.walk, amp:R.fly ? 0 : R.amp, flying:R.fly, dashing:R.fly, swing:R.swing, hit:FOE.hitT > 0, lean:R.amp*0.5, recoil:R.shoot ? 0.5 : 0});
   else rig(bt, R.x, R.y, R.face, {s:PILOT_S, pilot:true, body:L.p[0], dark:L.p[1], head:L.p[2], pack:L.p[3], visor:L.p[4], accent:L.p[5], light:'#7ee08a',
-    antenna:true, gun:{kind:'Pilot', col:'#5fe0ff'}, aimArm:R.shoot, walk:R.walk, amp:R.amp, hit:FOE.hitT > 0});
+    antenna:true, gun:{kind:'Pilot', col:'#5fe0ff'}, aimArm:R.shoot, walk:R.walk, amp:R.amp, hit:FOE.hitT > 0, lift:R.jh||0});
 }
 function drawFriendBaseDyn(bt){
   const sd = NET.side; if (!sd || !FRIEND_SIDES.includes(sd) || NET.status !== 'online') return;
