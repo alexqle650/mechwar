@@ -3039,9 +3039,9 @@ function gunModel(bt, x, z, h, yaw, kind, col, s, tier, flash){
     mz = L + 5; mh = 0.4; fr = 3.4;
   }
   if (flash){ // muzzle flash: bright core, coloured petals
-    const [a,b] = at(mz,0), q = 0.75 + Math.random()*0.5;
-    sph(bt, a, b, h+(mh-fr*q)*s, fr*2*q*s, fr*2*q*s, fr*2*q*s, 0, '#fffbe6', 1);
-    sph(bt, a+c*fr*s*0.8, b+sn*fr*s*0.8, h+(mh-fr*0.6*q)*s, fr*3*q*s, fr*1.2*q*s, fr*1.2*q*s, yaw, gl, 1);
+    const [a,b] = at(mz,0), q = 0.75 + Math.random()*0.5, f2 = Math.min(fr, 2.2);   // capped so the flash never covers the screen
+    sph(bt, a, b, h+(mh-f2*q*0.6)*s, f2*1.3*q*s, f2*1.3*q*s, f2*1.3*q*s, 0, '#fffbe6', 1);
+    sph(bt, a+c*f2*s*0.8, b+sn*f2*s*0.8, h+(mh-f2*0.5*q)*s, f2*2.4*q*s, f2*q*s, f2*q*s, yaw, gl, 1);
     for (const sd of [-1,1]){ const [a2,b2] = at(mz+0.5, sd*fr*0.7); sph(bt, a2, b2, h+(mh-0.8)*s, 2.4*s, 1.6*s, 1.6*s, yaw+sd*0.9, '#ffd23f', 1); }
   }
 }
