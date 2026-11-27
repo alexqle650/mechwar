@@ -124,6 +124,7 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
       <button class="btn" id="bayBtn">Workshop (B)</button>
       <button class="btn" id="idxBtn">Index (I)</button>
       <button class="btn" id="skinBtn">Skins (K)</button>
+      <button class="btn" id="petBtn">Pets (J)</button>
       <button class="btn" id="upBtnNav">Upgrades (U)</button>
       <button class="btn" id="setBtn">Settings (Esc)</button>
       <button class="btn" id="muteBtn">Sound: On (M)</button>
@@ -214,6 +215,19 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
       </div>
     </div>
 
+    <div class="ov" id="ovPets" hidden>
+      <div class="panel wide px" style="--edge:#7ee08a">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <h2>Pets</h2>
+          <button class="btn" id="petClose">Close (J)</button>
+        </div>
+        <p class="body" style="margin:0">Pets follow you everywhere and give a perk. Some of them fight too. Rarer pets have stronger perks. Equip one at a time.</p>
+        <p class="label">Hatch a capsule</p>
+        <div id="capGrid" class="sgrid"></div>
+        <p class="label">Your pets <span id="petCount"></span></p>
+        <div id="petGrid" class="sgrid"></div>
+      </div>
+    </div>
     <div class="ov" id="ovSkins" hidden>
       <div class="panel wide px" style="--edge:#ff4fd0">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
@@ -292,7 +306,7 @@ h1{font-family:var(--f-label);font-weight:700;font-size:1.05rem;letter-spacing:.
           </div>
         </div>
         <p class="label" style="margin-top:12px">Controls</p>
-        <p class="body" style="font-size:.85rem;margin:0;line-height:1.5">Move WASD · Aim with the mouse · Shoot: click or hold · Zoom: wheel · Turn camera: right-drag, Z / C · Q pulse · Space jump · X dodge or leg ability · T equip a better drop · E buy, open, steal · R get in or out of your mech · B workshop · I index · K skins · U upgrades · L lock your base · P multiplayer · M sound · N world map · F / G / H fight, flee or yard a crate · Esc pause</p>
+        <p class="body" style="font-size:.85rem;margin:0;line-height:1.5">Move WASD · Aim with the mouse · Shoot: click or hold · Zoom: wheel · Turn camera: right-drag, Z / C · Q pulse · Space jump · X dodge or leg ability · T equip a better drop · J pets · E buy, open, steal · R get in or out of your mech · B workshop · I index · K skins · U upgrades · L lock your base · P multiplayer · M sound · N world map · F / G / H fight, flee or yard a crate · Esc pause</p>
         <div class="btns" style="margin-top:10px"><button class="btn" id="quitBtn">Back to title</button></div>
       </div>
     </div>
@@ -558,7 +572,7 @@ function stats(){
   const setK = setN >= 6 ? 0.25 : setN >= 5 ? 0.15 : setN >= 3 ? 0.08 : 0;
   maxhp *= 1 + setK; dmg *= 1 + setK; if (setN >= 6) speed *= 1.1;
   const drones = (K.Torso === 'Drone Bay' ? 1 : 0) + (K.Arms === 'Drone Arms' ? 1 : 0) + (K.Core === 'Drone Core' ? 2 : 0);
-  return {power, maxhp:Math.floor(maxhp), dmg:Math.floor(dmg), speed, cd:Math.max(0.06,cd), pulse:Math.floor(pulse), pulseCd, K, T, weapon:K.Weapon || 'Blaster',
+  return petApply({power, maxhp:Math.floor(maxhp), dmg:Math.floor(dmg), speed, cd:Math.max(0.06,cd), pulse:Math.floor(pulse), pulseCd, K, T, weapon:K.Weapon || 'Blaster',
     shield: K.Torso === 'Shield Frame' ? Math.floor(maxhp*(0.2+0.04*T.Torso)) : 0,
     crit: K.Head === 'Optic Helm' ? 0.12+0.03*T.Head : K.Head === 'Crown Visor' ? 0.05 : 0,
     resist: Math.min(0.6, resist), thorns: K.Torso === 'Reactive Plate' ? 0.2+0.06*T.Torso : 0,
@@ -568,7 +582,7 @@ function stats(){
     od: 2.5+0.5*T.Core, heal: 0.1+0.04*T.Core, luck: (K.Head === 'Lucky Helm' ? 0.08+0.03*T.Head : 0) + 0.03*((S.rbs||{}).luck||0),
     rage: K.Arms === 'Rage Arms' ? 0.4+0.08*T.Arms : 0, vamp: K.Torso === 'Vampire Frame' ? 0.03+0.01*T.Torso : 0,
     freeze: K.Core === 'Freeze Core' ? 2+0.4*T.Core : 0, drones, droneMul: K.Torso === 'Drone Bay' ? 1.1+0.05*T.Torso : 1,
-    scale: Math.min(1.9, 1 + sz - nsz), setT, setN, setK};   // every Big/Gigantic/Colossal part adds its own growth, so one big part is visible
+    scale: Math.min(1.9, 1 + sz - nsz), setT, setN, setK});   // every Big/Gigantic/Colossal part adds its own growth, so one big part is visible
 }
 const setText = st => st.setK ? TIERS[st.setT].r+' set '+st.setN+'/6: +'+Math.round(st.setK*100)+'% damage and HP'+(st.setN >= 6 ? ', +10% speed' : '') :
   st.setN ? 'No set bonus yet. Wear 3 parts of the same rarity ('+TIERS[st.setT].r+' '+st.setN+'/3)' : '';
@@ -988,6 +1002,7 @@ function spawnBoss(i){
 }
 function bossDown(e){
   S.bossKills = (S.bossKills||0) + 1;
+  if (R() < 0.4) setTimeout(() => hatch(Math.min(NR, Math.max(1, (e.zone||1) - 1 + ri(0, 2))), 'The boss dropped a pet capsule. Hatched'), 1500);
   addXp(250*(e.zone||1)); hitStop = 0.3; flash('#ffffff', 0.6);
   const B = bosses[e.zone]; B.alive = false; B.at = clock + 300; B.e = null;
   sfx('bigboom'); sfx('fanfare'); shake = 6;
@@ -1232,6 +1247,7 @@ function meteorHit(m, z){
   if (R() < 0.22){ const p = newPart(Math.min(NR, rollRarity(z) + 1), null, z); giveLoot([p], 0, 'A meteor had a part inside!'); }
 }
 function goldenDown(e){
+  if (R() < 0.25) setTimeout(() => hatch(Math.min(NR, e.zone + 1), 'The golden bot had a pet inside! Hatched'), 1200);
   const z = e.zone, sc = Math.round(150*z*z*rbScrap()); EV.cur = null; S.goldCaught = (S.goldCaught||0) + 1; mission('event');
   flash('#ffcf3a', 0.5); hitStop = Math.max(hitStop, 0.1); spillCoins(e.x, e.y, 30);
   giveLoot([newPart(Math.min(NR, rollRarity(z) + 2), null, z)], sc, 'JACKPOT! You caught the golden bot:');
@@ -1363,6 +1379,104 @@ function baseLoot(c){
   return {parts, scrap: ri(L.scrap[0], L.scrap[1]) * (1 + 0.3*((c.zone||1)-1))|0};
 }
 let reveals = [];
+// ---------- pets: robot critters that follow you, give a perk, and some fight ----------
+var PETS = [null,   // var, not const: stats() can run before this line on load
+  {n:'Scrap Pup',        perk:'scrap', v:0.06, t:'+{p}% scrap'},
+  {n:'Vine Frog',        perk:'regen', v:0.004, t:'heals {p}% HP per second'},
+  {n:'Canyon Beetle',    perk:'resist', v:0.05, t:'{p}% less damage taken'},
+  {n:'Frost Fox',        perk:'ice', v:0.14, t:'throws ice bolts ({p}% of your damage) that slow bots'},
+  {n:'Neon Cat',         perk:'zap', v:0.11, t:'zaps bots ({p}% of your damage)'},
+  {n:'Magma Salamander', perk:'fire', v:0.2, t:'spits fireballs that splash ({p}% of your damage)'},
+  {n:'Void Wisp',        perk:'luck', v:0.03, t:'+{p}% luck for rarer crate loot'},
+  {n:'Star Owl',         perk:'open', v:0.06, t:'opens crates {p}% faster'}];
+const CAPS = [{n:'Basic capsule', cost:3000, w:[60,28,10,2,0,0,0,0]}, {n:'Rare capsule', cost:40000, w:[0,20,40,28,10,2,0,0]},
+  {n:'Mythic capsule', cost:600000, w:[0,0,0,30,38,22,8,2]}, {n:'Secret capsule', cost:8000000, w:[0,0,0,0,25,40,25,10]}];
+function petMul(t){ return 1 + (t-1)*0.32; }
+const petName = p => TIERS[p.t].r + ' ' + PETS[p.k].n;
+const petPerk = p => PETS[p.k].t.replace('{p}', +(PETS[p.k].v*petMul(p.t)*100).toFixed(1));
+const petValue = p => Math.round(CAPS[Math.min(3, Math.floor((p.t-1)/2))].cost*0.25*(1 + (p.t-1)%2*0.5));
+function myPet(){ return S.pet && S.pets ? S.pets.find(q => q.id === S.pet) || null : null; }   // a function declaration: stats() calls it before this line runs
+function petApply(st){
+  const p = myPet(); if (!p || typeof PETS === 'undefined') return st; const D = PETS[p.k], v = D.v*petMul(p.t);
+  if (D.perk === 'scrap') st.scrapMul = (st.scrapMul||1)*(1 + v);
+  if (D.perk === 'resist') st.resist = 1 - (1 - (st.resist||0))*(1 - v);
+  if (D.perk === 'luck') st.luck = (st.luck||0) + v;
+  if (D.perk === 'open') st.openMul = (st.openMul||1)*(1 - Math.min(0.6, v));
+  return st;
+}
+function hatch(tier, why){
+  const p = {id:S.petId++, k:ri(1, 8), t:tier}; S.pets.push(p); if (!S.pet) S.pet = p.id;
+  flash(TIERS[tier].c, 0.4); sfx('fanfare'); note((why || 'Hatched')+': '+petName(p)+'! It '+petPerk(p)+'.', TIERS[tier].c);
+  afterGearChange(); save(); if (!$('ovPets').hidden) renderPets(); return p;
+}
+function rollCap(c){ const w = CAPS[c].w, tot = w.reduce((a, b) => a + b, 0); let r = R()*tot; for (let i=0;i<8;i++){ r -= w[i]; if (r < 0) return i + 1; } return 1; }
+function buyCapsule(c){
+  const C = CAPS[c]; if (S.scrap < C.cost){ sfx('error'); return; } if (S.pets.length >= 40){ note('Your pet room is full (40). Release a pet first.', '#ff8c7a'); return; }
+  S.scrap -= C.cost; hatch(rollCap(c), 'Hatched a '+C.n);
+}
+function renderPets(){
+  $('capGrid').innerHTML = CAPS.map((c, i) => '<div class="scard"><b>'+c.n+'</b><span class="label">'+c.w.map((w, t) => w ? TIERS[t+1].r+' '+w+'%' : '').filter(Boolean).join(' · ')+'</span>'+
+    '<button class="btn" data-cap="'+i+'"'+(S.scrap < c.cost ? ' disabled' : '')+'>Hatch '+c.cost.toLocaleString()+'</button></div>').join('');
+  const list = S.pets.slice().sort((a, b) => b.t - a.t || a.k - b.k);
+  $('petCount').textContent = S.pets.length + ' / 40 · ' + new Set(S.pets.map(p => p.k)).size + ' of 8 kinds';
+  $('petGrid').innerHTML = list.length ? list.map(p => '<div class="scard'+(S.pet === p.id ? ' on' : '')+'" style="border-color:'+TIERS[p.t].c+'"><b style="color:'+TIERS[p.t].c+'">'+petName(p)+'</b><span class="label">'+petPerk(p)+'</span>'+
+    '<span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" data-pet="'+p.id+'" data-act="eq">'+(S.pet === p.id ? 'Unequip' : 'Equip')+'</button><button class="btn" data-pet="'+p.id+'" data-act="rel">Release +'+petValue(p).toLocaleString()+'</button></span></div>').join('')
+    : '<p class="body">No pets yet. Hatch a capsule above, or beat a boss or catch a golden bot for a chance at a free one.</p>';
+}
+function togglePets(force){
+  if (!$('ovChoice').hidden || !$('ovDead').hidden || !$('ovStart').hidden) return;
+  const on = force === undefined ? $('ovPets').hidden : force;
+  if (on) for (const o of ['ovBay','ovIndex','ovSkins','ovUp']) showOv(o, false);
+  showOv('ovPets', on); if (on) renderPets();
+}
+// follow, hop and fight
+let petPos = null;
+function petTick(dt){
+  const p = myPet(); if (!p){ petPos = null; return; }
+  const D = PETS[p.k], v = D.v*petMul(p.t), big = P.inMech ? mS()/1.45 : 0.6;
+  const want = {x:P.x - Math.cos(P.face)*30*big + Math.cos(P.face + 1.57)*20*big, y:P.y - Math.sin(P.face)*30*big + Math.sin(P.face + 1.57)*20*big};
+  if (!petPos || Math.hypot(petPos.x - P.x, petPos.y - P.y) > 600) petPos = {x:want.x, y:want.y, yaw:P.face, hop:0, fireT:1, walk:0};
+  const dx = want.x - petPos.x, dy = want.y - petPos.y, d = Math.hypot(dx, dy), sp = Math.min(d*4, 520);
+  if (d > 2){ petPos.x += dx/d*sp*dt; petPos.y += dy/d*sp*dt; petPos.yaw = Math.atan2(dy, dx); petPos.walk += sp*dt*0.15; }
+  petPos.mv = Math.min(1, sp/120);
+  if (D.perk === 'regen' && !P.dead){ const mx = CS().maxhp || 60; P.hp = Math.min(mx, P.hp + mx*v*dt); }
+  if ((D.perk === 'ice' || D.perk === 'zap' || D.perk === 'fire') && !P.dead){
+    petPos.fireT -= dt; if (petPos.fireT > 0) return;
+    let best = null, bd = 340; for (const e of enemies) if (!e.dead){ const dd = Math.hypot(e.x - petPos.x, e.y - petPos.y); if (dd < bd){ bd = dd; best = e; } }
+    if (!best) return; petPos.fireT = D.perk === 'zap' ? 0.9 : D.perk === 'ice' ? 1.3 : 1.9;
+    const a = Math.atan2(best.y - petPos.y, best.x - petPos.x), base = Math.max(6, CS().dmg || 8)*v; petPos.yaw = a;
+    const col = D.perk === 'ice' ? '#bfe8ff' : D.perk === 'zap' ? '#ff4fd0' : '#ff7a1a';
+    bullets.push(Object.assign({x:petPos.x, y:petPos.y, h:8, vx:Math.cos(a)*460, vy:Math.sin(a)*460, life:0.9, dmg:base, from:'p', col, r:D.perk === 'fire' ? 5 : 3, pet:true},
+      D.perk === 'fire' ? {splash:50} : D.perk === 'ice' ? {chill:1.5} : {}));
+    sfx(D.perk === 'zap' ? 'zap' : 'pilot');
+  }
+}
+// pet models: small, built from the same pieces as everything else, coloured by area and rarity
+function drawPet(bt, x, z, yaw, k, t, walk, mv, sc){
+  const A = AREA_SKIN[k], c1 = A.pl, c2 = A.tr, gl = TIERS[t].c === '#ffffff' ? '#ffe9a8' : TIERS[t].c, dk = '#1c1f26', S2 = (sc || 1)*(1 + (t-1)*0.04);
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), hop = Math.abs(Math.sin(walk*2))*3*mv*S2;
+  const B = (fn, lx, ly, lz, sx, sh, sz, col, md, pt, dy) => fn(bt, x + (cy*lx - sy*lz)*S2, z + (sy*lx + cy*lz)*S2, ly*S2 + hop, sx*S2, sh*S2, sz*S2, yaw + (dy||0), col, md||0, pt||0);
+  shadow(x, z, 10*S2);
+  const legs = (n, dx, dz, h, col) => { for (let i=0;i<n;i++){ const sd = i%2 ? 1 : -1, fx = (Math.floor(i/2) - (n/2-1)/2)*dx, sw = Math.sin(walk*2 + i*1.6)*1.4*mv; B(box, fx + sw, -hop/S2, sd*dz, 1.4, h, 1.4, col); } };
+  if (k === 1){ legs(4, 6, 2.2, 5, dk); B(box, 0, 4.4, 0, 10, 4.6, 5.4, c1); B(box, 5.4, 6.4, 0, 4.6, 4.2, 4.4, c1); B(box, 7.8, 6.4, 0, 1, 1.6, 3.4, dk);
+    for (const sd of [-1,1]){ B(box, 5, 10.4, sd*1.5, 1.2, 2.6, 1, c2, 0, 0.3); B(box, 7.7, 8, sd*1.1, 0.4, 0.8, 0.8, gl, 1); } B(cyl, -5, 8, 0, 0.6, 5, 0.6, dk, 0, 0.5); B(sph, -6.6, 12.4, 0, 1.4, 1.4, 1.4, gl, 1); }
+  if (k === 2){ B(sph, 0, 0.5, 0, 10, 7, 10, c1); B(sph, 0.6, 1, 0, 8, 4, 8.6, shade(c1, 1.2)); for (const sd of [-1,1]){ B(sph, 2.4, 6, sd*2.6, 3.4, 3.4, 3.4, '#f4f8fc'); B(sph, 3.6, 6.8, sd*2.6, 1.6, 1.6, 1.6, gl, 1); B(box, -2, 0, sd*4.4, 5, 1.4, 2.4, c1, 0, 0, sd*0.4); }
+    B(box, -1, 7.4, 0, 3.2, 0.5, 2, c2, 0, -0.4); }
+  if (k === 3){ legs(6, 3.6, 4, 3, dk); B(sph, 0, 1.6, 0, 12, 7, 9, c1); B(box, 0, 4.6, 0, 11, 0.6, 0.6, dk); B(sph, 6.2, 2.6, 0, 4, 3.4, 4, dk); B(box, 8, 4, 0, 4, 1.2, 1.2, c2, 0, -0.5); for (const sd of [-1,1]) B(sph, 7.6, 3.6, sd*1.3, 1, 1, 1, gl, 1); }
+  if (k === 4){ legs(4, 5.6, 1.8, 5.4, c1); B(box, 0, 5, 0, 9, 3.6, 4.2, c1); B(box, 5, 7, 0, 4, 3.6, 3.6, c1); B(box, 7.6, 7.2, 0, 2.6, 1.8, 2, '#f4f8fc');
+    for (const sd of [-1,1]){ B(box, 4.4, 10.4, sd*1.3, 1.4, 3.2, 1, c1, 0, 0.15); B(box, 6.6, 8.6, sd*1, 0.4, 0.7, 0.7, gl, 1); } B(box, -6, 7, 0, 7, 3.4, 3.6, '#f4f8fc', 0, -0.6); B(box, -10, 10.4, 0, 2.6, 2.6, 2.8, c2, 0, -0.6); }
+  if (k === 5){ legs(4, 5, 1.8, 4.6, dk); B(box, 0, 4.4, 0, 9, 3.6, 4.2, c1); B(box, 5, 6, 0, 4.2, 4, 4.2, c1); for (const sd of [-1,1]){ B(box, 5, 10, sd*1.5, 1.6, 2.4, 1, c1, 0, 0, 0.785); B(box, 7.2, 7.6, sd*1.2, 0.4, 0.8, 0.8, gl, 1); }
+    B(box, 0, 8.1, 0, 7, 0.4, 0.6, c2, 1); B(cyl, -5, 6, 0, 0.8, 7, 0.8, c1, 0, -0.5); B(sph, -8.4, 11.6, 0, 1.6, 1.6, 1.6, c2, 1); }
+  if (k === 6){ for (let i=0;i<4;i++){ const sw = Math.sin(walk*2 + i)*1.2*mv; B(box, 4 - i*4, 1.6, sw, 4.6 - i*0.6, 3 - i*0.4, 4.4 - i*0.6, i%2 ? shade(c1, 1.15) : c1); B(sph, 4 - i*4, 4.4 - i*0.4, sw, 1.2, 1.2, 1.2, c2, 1); }
+    B(box, 7.4, 1.8, 0, 4, 2.6, 4, c1); for (const sd of [-1,1]){ B(sph, 9, 4, sd*1.2, 0.9, 0.9, 0.9, gl, 1); B(box, 4, 0, sd*3, 1.2, 1.6, 2.4, dk); B(box, -4, 0, sd*2.6, 1.2, 1.6, 2.4, dk); } B(box, -13, 1.4, 0, 6, 1.2, 1.4, c1, 0, 0.1); }
+  if (k === 7){ const f = 8 + Math.sin(clock*3 + x)*2; B(sph, 0, f, 0, 7, 7, 7, c1, 5); B(sph, 0, f + 1.6, 0, 3.6, 3.6, 3.6, gl, 1);
+    for (let i=0;i<4;i++){ const a = clock*2 + i*1.571; B(box, Math.cos(a)*6, f + 1 + Math.sin(clock*4 + i)*1.4, Math.sin(a)*6, 1.2, 3, 1.2, c2, 1, 0.3, -a); } }
+  if (k === 8){ const f = 6 + Math.sin(clock*4)*1.6, fl = Math.sin(clock*12)*0.5; B(sph, 0, f, 0, 7.4, 8.6, 7, c1); B(sph, 1.4, f + 2.4, 0, 5, 4, 5, shade(c1, 1.25));
+    for (const sd of [-1,1]){ B(sph, 3, f + 5.2, sd*1.7, 2.4, 2.4, 2.4, '#f4f8fc'); B(sph, 3.9, f + 5.4, sd*1.7, 1.2, 1.2, 1.2, gl, 1); B(box, 0, f + 8.4, sd*2.2, 1.2, 2.2, 1, c2, 0, -0.3); B(box, -1, f + 3, sd*4.4, 5.4, 0.6, 3, c2, 0, 0.3, sd*(0.4 + fl)); }
+    B(box, 4, f + 3.6, 0, 1.6, 1.2, 1, '#ffcf3a', 0, 0.6); }
+  if (t >= 5) B(cyl, 0, 0.2, 0, 14, 0.4, 14, gl, 5);   // a rarity glow under Legendary and better pets
+}
+function drawMyPet(bt){ const p = myPet(); if (p && petPos && !P.dead) drawPet(bt, petPos.x, petPos.y, petPos.yaw, p.k, p.t, petPos.walk, petPos.mv); }
 // quick equip: when a drop beats what you're wearing, press T to put it on right away (no trip to the workshop)
 let upg = null;
 function checkUpgrade(p){
@@ -1546,6 +1660,7 @@ function sendToYard(c){
 const MECH = {x:HANGAR.x, y:HANGAR.y, face:Math.PI/2, hp:0, state:'none', repairT:0};
 const CS = () => P.inMech ? ST : PILOT;
 function ensureSave(){
+  if (!Array.isArray(S.pets)) S.pets = []; if (S.pet === undefined) S.pet = null; if (!S.petId) S.petId = 1;
   S.v = 2;   // save format version: bump it when the format changes, and upgrade older saves here
   if (S.tut === undefined) S.tut = S.mechBuilt && (S.kills||0) >= 20 ? 6 : 0;   // veterans skip the guide
   if (S.mechBuilt === undefined) S.mechBuilt = SLOTS.every(sl => S.eq[sl] && partById(S.eq[sl]));
@@ -1661,6 +1776,7 @@ addEventListener('keydown', e => {
   if (e.code==='KeyB') toggleBay();
   if (e.code==='KeyI') toggleIndex();
   if (e.code==='KeyK') toggleSkins();
+  if (e.code==='KeyJ') togglePets();
   if (e.code==='KeyU') toggleUp();
   if (e.code==='KeyM') toggleMute();
   if (e.code==='KeyN') BIGMAP = !BIGMAP;
@@ -1756,7 +1872,7 @@ $('tJump').addEventListener('click', () => jump());
 $('tBay').addEventListener('click', () => toggleBay());
 
 /* ================= overlays ================= */
-const OVS = ['ovStart','ovChoice','ovBay','ovDead','ovNew','ovIndex','ovSkins','ovUp','ovCodes','ovGame','ovNet','ovSet'];
+const OVS = ['ovStart','ovChoice','ovBay','ovDead','ovNew','ovIndex','ovSkins','ovUp','ovCodes','ovGame','ovNet','ovSet','ovPets'];
 const UPGRADES = [
   {id:'cspd',  n:'Conveyor speed',     max:10, cost:l => Math.round(200*Math.pow(1.8,l)), d:l => 'A new part every '+(3.2*Math.pow(0.88,l)).toFixed(1)+'s'},
   {id:'cluck', n:'Conveyor luck',      max:10, cost:l => Math.round(300*Math.pow(2,l)),   d:l => 'Rarer parts on the belt (luck '+l+')'},
@@ -1819,7 +1935,9 @@ const ACH = [
   ['core20', 'Overcharged', 'Core level 20', () => (S.core||0) >= 20, 4000],
   ['rb1', 'Born Again', 'Rebirth once', () => (S.rb||0) >= 1, 0],
   ['pvp', 'Ambush!', 'Knock out a friend in PvP', () => (S.pvpKills||0) >= 1, 1000],
-  ['steal', 'Sticky Fingers', 'Steal a part from a friend', () => (S.steals||0) >= 1, 1000]];
+  ['steal', 'Sticky Fingers', 'Steal a part from a friend', () => (S.steals||0) >= 1, 1000],
+  ['pet1', 'Best Friend', 'Get a pet', () => (S.pets||[]).length >= 1, 500],
+  ['pet8', 'Zookeeper', 'Own all 8 kinds of pet', () => new Set((S.pets||[]).map(p => p.k)).size >= 8, 20000]];
 let achT = 0, achShow = [];
 function achTick(dt){
   achT -= dt; if (achT > 0) return; achT = 1; if (!S.ach) S.ach = {};
@@ -1879,6 +1997,13 @@ $('bayBtn').addEventListener('click', () => toggleBay());
 $('idxBtn').addEventListener('click', () => toggleIndex());
 $('idxClose').addEventListener('click', () => toggleIndex(false));
 $('skinBtn').addEventListener('click', () => toggleSkins());
+$('petBtn').addEventListener('click', () => togglePets());
+$('petClose').addEventListener('click', () => togglePets(false));
+$('capGrid').addEventListener('click', e => { const b = e.target.closest('button[data-cap]'); if (b) buyCapsule(+b.dataset.cap); });
+$('petGrid').addEventListener('click', e => { const b = e.target.closest('button[data-pet]'); if (!b) return; const id = +b.dataset.pet, p = S.pets.find(q => q.id === id); if (!p) return;
+  if (b.dataset.act === 'eq'){ S.pet = S.pet === id ? null : id; sfx('equip'); petPos = null; }
+  if (b.dataset.act === 'rel'){ S.pets = S.pets.filter(q => q.id !== id); if (S.pet === id) S.pet = null; const v = petValue(p); S.scrap += v; note('Released '+petName(p)+' for '+v+' scrap.', '#c9d2e3'); sfx('coin'); }
+  afterGearChange(); renderPets(); });
 $('upBtnNav').addEventListener('click', () => toggleUp());
 $('upClose').addEventListener('click', () => toggleUp(false));
 $('upGrid').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; const u = UPGRADES.find(x => x.id === b.dataset.up), l = S.up[u.id]||0, c = u.cost(l);
@@ -2488,6 +2613,7 @@ function updateBullets(dt){
           if (b.splash){ explode(b); b.life = 0; break; }
           hurtEnemy(e,b.dmg,b.crit); if (!b.flame) burst(b.x,b.y,b.col,5,80);
           if (b.burn){ e.burnT = 2.5; e.burnD = Math.max(e.burnD||0, b.burn); }
+          if (b.chill && !e.pvp) e.slowT = Math.max(e.slowT||0, b.chill);
           if (b.pierce) b.pierce.add(e); else { b.life = 0; break; }
         }
       }
@@ -2500,7 +2626,7 @@ function updateBullets(dt){
   bullets = bullets.filter(b => b.life > 0);
   for (const p of parts){ p.x += p.vx*dt; p.y += p.vy*dt; p.vx *= 0.9; p.vy *= 0.9; p.life -= dt; if (p.vh){ p.h += p.vh*dt; p.vh -= 340*dt; if (p.h < 0){ p.h = 0; p.vh *= -0.35; } } }
   parts = parts.filter(p => p.life > 0);
-  coinTick(dt); debrisTick(dt); eventTick(dt); achTick(dt);
+  coinTick(dt); debrisTick(dt); eventTick(dt); achTick(dt); petTick(dt);
   for (const f of floaters){ f.h += 22*dt; f.life -= dt; }
   floaters = floaters.filter(f => f.life > 0);
   for (const b of bolts) b.t -= dt;
@@ -3974,7 +4100,7 @@ function buildDynamic(){
   for (const c of crates) if (Math.abs(c.x-P.x) < 1100 && Math.abs(c.y-P.y) < 1100) drawCrateDyn(bt, c);
   for (const e of enemies) drawEnemyDyn(bt, e);
   drawPlayerDyn(bt);
-  drawRemoteDyn(bt); drawFriendBaseDyn(bt); drawMotes(bt); lockDyn(bt); drawCoins(bt); drawDebris(bt); drawEvent(bt);
+  drawRemoteDyn(bt); drawFriendBaseDyn(bt); drawMotes(bt); lockDyn(bt); drawCoins(bt); drawDebris(bt); drawEvent(bt); drawMyPet(bt); drawRemotePet(bt);
   // treadmill belts
   if (P.y > 900) for (const t of TREADS) for (let k=0;k<6;k++){ const zz = t.y - 48 + ((k*16 + clock*70) % 96); box(bt, t.x, zz, 6.1, 40, 0.4, 3, 0, '#1a1c22'); }
   // portals (zone side and arena exits)
@@ -4452,7 +4578,8 @@ function loadPeer(i = 0){
 function netSend(m){ try { if (NET.conn && NET.conn.open) NET.conn.send(m); } catch(e){} }
 function myLook(){
   const L = mechLook(), sk = skin();
-  return {A:L.A, K:L.K, Zn:L.Zn, T:L.T, show:L.show, wt:L.wt, sc:+mS().toFixed(3), m:sk.m, p:sk.p, built:!!S.mechBuilt, pw:ST.power||0, name:S.name};
+  const pt = myPet();
+  return {A:L.A, K:L.K, Zn:L.Zn, T:L.T, show:L.show, wt:L.wt, sc:+mS().toFixed(3), m:sk.m, p:sk.p, built:!!S.mechBuilt, pw:ST.power||0, name:S.name, pet: pt ? [pt.k, pt.t] : 0};
 }
 function cleanLook(m){
   const cols = (a, n, d) => Array.isArray(a) && a.length >= n ? a.slice(0, n).map(c => okCol(c) || '#8b95a6') : d;
@@ -4463,7 +4590,8 @@ function cleanLook(m){
     Zn[sl] = Math.round(num(m.Zn && m.Zn[sl], 0, NZ, 0)); show[sl] = !!(m.show && m.show[sl]);
   }
   return {A, K, Zn, T, show, wt:Math.round(num(m.wt, 1, NR, 1)), sc:num(m.sc, 0.5, 6, 1.45), m:cols(m.m, 3, SKINS[0].m), p:cols(m.p, 6, SKINS[0].p),
-    built:!!m.built, pw:Math.round(num(m.pw, 0, 1e9, 0)), name:cleanName(m.name)};
+    built:!!m.built, pw:Math.round(num(m.pw, 0, 1e9, 0)), name:cleanName(m.name),
+    pet: Array.isArray(m.pet) ? [Math.round(num(m.pet[0], 1, 8, 1)), Math.round(num(m.pet[1], 1, NR, 1))] : null};
 }
 function myBase(){
   const now = Date.now(), part = id => { const p = partById(id); return p ? {slot:p.slot, tier:p.tier, name:p.name, area:p.area||1} : null; };
@@ -4711,7 +4839,7 @@ $('quitBtn').addEventListener('click', () => { toggleSet(false); save(); showOv(
 addEventListener('keydown', e => {
   if (e.code !== 'Escape' || e.target.tagName === 'INPUT') return;
   if (!$('ovSet').hidden){ toggleSet(false); return; }
-  const CLOSE = {ovBay:'bayClose', ovIndex:'idxClose', ovSkins:'skinClose', ovUp:'upClose', ovCodes:'codesClose', ovNet:'netClose'};
+  const CLOSE = {ovPets:'petClose', ovBay:'bayClose', ovIndex:'idxClose', ovSkins:'skinClose', ovUp:'upClose', ovCodes:'codesClose', ovNet:'netClose'};
   for (const id in CLOSE) if (!$(id).hidden){ $(CLOSE[id]).click(); return; }   // Esc closes whatever panel is open
   if (!OVS.some(id => id !== 'ovSet' && !$(id).hidden)) toggleSet(true);
 });
@@ -4744,6 +4872,16 @@ function tutHUD(){
   text(Math.round(d/9) + 'M', ax, ay+8, '#ffcf3a', 8, 'center');
 }
 // ---------- drawing the friend ----------
+let rPet = null;
+function drawRemotePet(bt){
+  const R = NET.R; if (!R || !R.seen || R.dead || !R.look || !R.look.pet){ rPet = null; return; }
+  if (Math.abs(R.x-P.x) > 1600 || Math.abs(R.y-P.y) > 1600) return;
+  const big = R.inMech ? R.look.sc/1.45 : 0.6, wx = R.x - Math.cos(R.face||0)*30*big, wy = R.y - Math.sin(R.face||0)*30*big;
+  if (!rPet || Math.hypot(rPet.x - wx, rPet.y - wy) > 600) rPet = {x:wx, y:wy, yaw:0, walk:0};
+  const dx = wx - rPet.x, dy = wy - rPet.y, d = Math.hypot(dx, dy), sp = Math.min(d*4, 520)/60;
+  if (d > 2){ rPet.x += dx/d*sp; rPet.y += dy/d*sp; rPet.yaw = Math.atan2(dy, dx); rPet.walk += sp*0.15; }
+  drawPet(bt, rPet.x, rPet.y, rPet.yaw, R.look.pet[0], R.look.pet[1], rPet.walk, Math.min(1, sp*60/120));
+}
 function drawRemoteDyn(bt){
   const R = NET.R; if (!R || !R.seen || R.dead || !R.look) return;
   if (Math.abs(R.x-P.x) > 1600 || Math.abs(R.y-P.y) > 1600) return;
